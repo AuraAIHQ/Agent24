@@ -46,5 +46,5 @@ evaluation:
 evolution:
   meta_review_interval: 5      # cycles before checking for cross-cycle patterns
   allow_self_modification: false  # if true, /evolve can suggest SKILL.md changes
-  results_file: ".claude/results.log"  # relative to cwd
+  results_file: ".claude/results.log"  # YAML multi-doc archive, relative to cwd
   memory_scope: "auto"         # auto | global | project

@@ -123,14 +123,30 @@ Read `agent-config.yaml` (in cwd, or `~/.claude/agent-config.yaml`) and update t
 - Read `evaluation.correctness_gate` from config (default: 3) for the gating threshold
 - Do NOT add fields that don't exist in the config schema
 
-### 4c. Archive to Results Log
+### 4c. Archive to Results Log (DGM-inspired)
 
 Read `evolution.results_file` from `agent-config.yaml` (default: `.claude/results.log`).
 Create parent directory first (use Bash: `mkdir -p "$(dirname "$results_file")"`).
-Append one line:
+
+Append a **structured YAML block** (not just a TSV line). This enables lineage tracking across cycles:
+
+```yaml
+---
+id: "{ISO-date}-{task-type-short}"    # unique cycle ID
+date: "{ISO-date}"
+task_type: "{coding|debugging|refactoring|analysis|research}"
+task: "{one-line task description}"
+strategy: "{approach used}"
+score: {overall-score}
+correctness: {correctness-score}
+result: "{success|partial|failed}"
+parent: "{id of previous cycle on same task type, or null}"
+insight: "{one-line key takeaway}"
 ```
-{ISO-date}\t{task-type}\t{score}\t{strategy}\t{one-line-insight}
-```
+
+**Lineage rule:** Before appending, scan the archive for the most recent entry with the same `task_type`. If found, set `parent` to that entry's `id`. This creates a per-task-type improvement chain that shows whether strategies are trending up or down.
+
+The archive file uses YAML multi-document format (blocks separated by `---`). To read it, parse each `---`-separated block independently.
 
 ### 4d. Recursive Self-Improvement (HyperAgents-inspired)
 
@@ -162,6 +178,14 @@ Do NOT directly modify SKILL.md files. Write suggestions to memory for human rev
 - **Correctness gates everything.** A beautiful, efficient solution that produces wrong output is score 2.
 - **Sanitize memory filenames.** Strip special chars. `strategy-coding-fix-auth-bug.md` not `strategy-coding-fix "auth" bug!.md`.
 - **Always create dirs before writing.** `mkdir -p .claude/memory` before writing memory files.
+
+### Context Engineering (from Agent-Skills-CE research)
+
+- **Effective context = 60-70% of nominal window.** Don't assume you have the full window. Phase 0 loading must be selective.
+- **Lost-in-middle effect.** Start and end of context have 85-95% recall; middle drops to 76-82%. Put critical info (success criteria, correctness gate) at the TOP of your plan, not buried in the middle.
+- **Load only what's relevant.** Don't dump all memories into context. In Phase 0, scan MEMORY.md index lines and only Read files whose descriptions match the current task type.
+- **Compress, don't transcribe.** When writing memory, summarize the insight — don't paste full tool output or code blocks. One paragraph > one page.
+- **Isolate subagent context.** When using the Agent tool, give the subagent only what it needs. Don't forward the entire org blueprint for a file search task.
 
 ## Integration
 
