@@ -39,7 +39,7 @@ strategies:
 evaluation:
   correctness_gate: 3          # Stage 1: correctness below this skips full evaluation
   min_score_to_skip_memory: 5  # perfect score + nothing new = skip memory write
-  min_score_to_keep: 3         # below this, strategy success_rate gets a 0
+  min_score_to_keep: 3         # below this, record failure memory (what went wrong)
   staged: true                 # enable staged evaluation (Stage 1 → 2 → 3)
 
 # --- Evolution Parameters ---

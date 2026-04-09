@@ -57,7 +57,7 @@ Verify by checking:
 
 Score correctness 1-5. Read `evaluation.correctness_gate` from `agent-config.yaml` (default: 3).
 
-**If `staged` is true AND correctness < correctness_gate → STOP evaluation here.** Overall score = min(2, correctness). Skip to Phase 4 with only the correctness score. This saves effort on detailed evaluation of failed work.
+**If `staged` is true AND correctness < correctness_gate → STOP evaluation here.** Overall score = min(2, correctness). Set `result` = `"failed"`. Skip to Phase 4 with only the correctness score. This saves effort on detailed evaluation of failed work.
 
 **If `staged` is false → always proceed to Stage 2** regardless of correctness score. The correctness score is still recorded but does not gate.
 
@@ -107,10 +107,10 @@ This label is used by Phase 4b (success_rate) and Phase 4c (archive).
   - `global`: write only to `~/.claude/memory/`
   Note: Phase 0 always reads BOTH project and global memory for full context. This setting only controls where new memories are WRITTEN.
 
-**When to write:**
-- Score < 3: Record what failed, root cause, alternative approach
-- Score >= 4: Record what worked, task type, strategy used
-- Score 5 with nothing new: Skip memory update
+**When to write** (read thresholds from `agent-config.yaml`):
+- Overall score < `min_score_to_keep` (default 3): Record what failed, root cause, alternative approach
+- Overall score >= 4: Record what worked, task type, strategy used
+- Overall score >= `min_score_to_skip_memory` (default 5) with nothing new: Skip memory update
 
 Memory file format:
 ```markdown
