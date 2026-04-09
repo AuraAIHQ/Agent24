@@ -35,11 +35,12 @@ strategies:
     uses: 0
 
 # --- Evaluation Thresholds ---
-# Referenced by /evolve Phase 3 (Evaluate) and Phase 4 (Improve)
+# Referenced by /evolve Phase 3 (Staged Evaluation) and Phase 4 (Improve)
 evaluation:
+  correctness_gate: 3          # Stage 1: correctness below this skips full evaluation
   min_score_to_skip_memory: 5  # perfect score + nothing new = skip memory write
-  min_score_to_keep: 3         # below this, strategy is marked as failed
-  correctness_gate: 3          # correctness below this caps overall at 2
+  min_score_to_keep: 3         # below this, strategy success_rate gets a 0
+  staged: true                 # enable staged evaluation (Stage 1 → 2 → 3)
 
 # --- Evolution Parameters ---
 evolution:

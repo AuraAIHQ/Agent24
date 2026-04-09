@@ -40,22 +40,39 @@ Key principles:
 - Use the Agent tool for independent parallel subtasks when beneficial
 - Track internally: steps taken, errors encountered, tools used
 
-## Phase 3: Evaluate
+## Phase 3: Staged Evaluation (HyperAgents-inspired)
 
-Self-assess with **correctness as the gating dimension**.
+Evaluation is **staged** to avoid wasting effort on failed attempts:
 
-Read `evaluation.correctness_gate` from `agent-config.yaml` (default: 3). Use this as the threshold below.
+### Stage 1: Quick Correctness Check (always run)
+
+Answer ONE question: **Did it produce the correct result?**
+
+Verify by checking:
+- Output files exist and contain expected content
+- Commands executed without errors
+- Results match the task's success criteria
+
+Score correctness 1-5. Read `evaluation.correctness_gate` from `agent-config.yaml` (default: 3).
+
+**If correctness < correctness_gate → STOP evaluation here.** Overall score = min(2, correctness). Skip to Phase 4 with only the correctness score. This saves effort on detailed evaluation of failed work.
+
+### Stage 2: Full Evaluation (only if Stage 1 passes)
+
+Only reached when correctness >= correctness_gate. Score all dimensions:
 
 | Dimension | Score (1-5) | Notes |
 |-----------|-------------|-------|
-| **Correctness** | ? | Did it produce the right result? **If below gate, overall is capped at 2.** |
+| **Correctness** | {from Stage 1} | Already assessed |
 | Efficiency | ? | Could it have been done with fewer steps? |
 | Robustness | ? | Did error handling work? Were edge cases covered? |
 | Strategy | ? | Was the chosen approach optimal? |
 
-**Overall score** = if correctness < correctness_gate then min(2, average) else average.
+**Overall score** = average of all dimensions.
 
-Compare with memory: Did a known strategy help or fail? Is this a new pattern?
+### Stage 3: History Comparison (only if Stage 2 ran)
+
+Compare with memory: Did a known strategy help or fail? Is this a new pattern? Quality trending up or down?
 
 ## Phase 4: Improve (the self-evolution step)
 
