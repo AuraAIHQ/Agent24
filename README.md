@@ -1,156 +1,118 @@
-<p align="center">
-  <a href="https://www.thirdlayer.inc">
-    <img src="https://www.thirdlayer.inc/thirdlayer-logo.svg" alt="thirdlayer" width="200">
-  </a>
-</p>
+# Agent24
 
-<blockquote>
-<p>We're launching a product around self-configuring agents soon. <a href="https://form.typeform.com/to/ZQbnbO09">Sign up here.</a><br>We're hiring engineers. If this work interests you, reach out to <a href="mailto:hello@thirdlayer.inc">hello@thirdlayer.inc</a> with your Github link.</p>
-</blockquote>
+> Self-evolving agent framework for Claude Code. No API key needed — runs entirely on your Claude Code subscription.
 
-# AutoAgent
+Agent24 gives Claude Code **persistent memory, self-evaluation, and cross-project organization awareness**. It learns from every task cycle, improves its strategies over time, and keeps all your projects aligned under one shared blueprint.
 
-> Like autoresearch but for agent engineering. Give an AI agent a task, let it build and iterate on an agent harness autonomously overnight. It modifies the system prompt, tools, agent configuration, and orchestration, runs the benchmark, checks the score, keeps or discards the change, and repeats.
+## What It Does
 
-![teaser](progress.png)
+- **/evolve `<task>`** — Execute a task with a full evolution cycle: plan → execute → evaluate → improve → record. The agent updates its own strategy success rates and writes reusable learnings to memory.
+- **/evaluate `[target]`** — Deep multi-dimension assessment of code, commits, or PRs. Correctness-gated scoring prevents inflated scores on broken work.
+- **/org-sync** — Organization-level shared context. Every project knows the big picture: architecture, dependencies, component status.
+- **/init** — Interactive onboarding. Guided Q&A to set up your organization, projects, tech stack, and preferences.
 
-The core idea is the same: you're not touching the harness Python files like you normally would as an engineer. Instead, you program `program.md`, the Markdown file that provides context to the meta-agent and defines the agent-engineering loop.
-
-## How it works
-
-The repo has a few files and directories that matter:
-
-- **`agent.py`** -- the entire harness under test in a single file. It contains
-  config, tool definitions, agent registry, routing/orchestration, and the
-  Harbor adapter boundary. The adapter section is explicitly marked as fixed;
-  the rest is the primary edit surface for the meta-agent.
-- **`program.md`** -- instructions for the meta-agent + the directive (what
-  kind of agent to build). **This file is edited by the human**.
-- **`tasks/`** -- evaluation tasks in
-  [harbor](https://github.com/laude-institute/harbor) format. In a clean
-  baseline branch, benchmark payloads may be omitted and added in
-  benchmark-specific branches.
-- **`.agent/`** -- optional workspace artifacts for reusable instructions,
-  notes, prompts, or skills.
-
-The metric is total **score** produced by the benchmark's task test suites. The
-meta-agent hill-climbs on this score.
-
-## Quick start
-
-**Requirements:** Docker, Python 3.10+, [uv](https://docs.astral.sh/uv/), and
-whatever model-provider credentials your current `agent.py` harness requires.
+## Quick Start
 
 ```bash
-# 1. Install uv (if you don't have it)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# 1. Clone
+git clone https://github.com/jhfnetboy/Agent24.git
+cd Agent24
 
-# 2. Install dependencies
-uv sync
+# 2. Install globally (copies skills to ~/.claude/)
+bash install.sh
 
-# 3. Set up the environment variables required by your current agent/runtime
-# Example:
-cat > .env << 'EOF'
-OPENAI_API_KEY=...
-EOF
-
-# 4. Build base image
-docker build -f Dockerfile.base -t autoagent-base .
-
-# 5. Add tasks to tasks/ (see Task format section below)
-
-# 6. Run a single benchmark task
-rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ --task-name "<task-name>" -l 1 -n 1 --agent-import-path agent:AutoAgent -o jobs --job-name latest > run.log 2>&1
-
-# 7. Run all tasks in parallel (-n = concurrency, default 4)
-rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ -n 100 --agent-import-path agent:AutoAgent -o jobs --job-name latest > run.log 2>&1
+# 3. Open any project and start using
+cd your-project/
+claude
+> /init                    # first time: guided setup
+> /evolve fix the auth bug # run a self-evolving cycle
+> /evaluate                # evaluate recent work
+> /org-sync                # check org context
 ```
 
-## Running the meta-agent
-
-Point your coding agent at the repo and prompt:
+## How Self-Evolution Works
 
 ```
-Read program.md and let's kick off a new experiment!
+ /evolve <task>
+    │
+    ├── Phase 0: Load context (org blueprint, memory, config)
+    ├── Phase 1: Understand + Plan (infer task type, pick strategy)
+    ├── Phase 2: Execute (tools, verification, adaptation)
+    ├── Phase 3: Staged Evaluation
+    │     ├── Stage 1: Quick correctness gate
+    │     ├── Stage 2: Full multi-dimension eval (if passed)
+    │     └── Stage 3: History comparison (if passed)
+    ├── Phase 4: Improve
+    │     ├── Write strategy memory (what worked / failed)
+    │     ├── Update agent-config.yaml (success rates)
+    │     ├── Append to results archive
+    │     └── Detect cross-cycle patterns → meta-improvement
+    └── Phase 5: Report
 ```
 
-The meta-agent will read the directive, inspect the current harness, run the
-benchmark, diagnose failures, modify `agent.py`, and iterate.
+Each cycle makes the agent slightly better. Strategy success rates converge. Failed approaches get deprioritized. Winning patterns get reinforced.
 
-## Project structure
+## Organization Context
 
-```text
-agent.py                       -- single-file harness under test
-  editable harness section     -- prompt, registries, tools, routing
-  fixed adapter section        -- Harbor integration + trajectory serialization
-program.md                     -- meta-agent instructions + directive
-Dockerfile.base                -- base image
-.agent/                        -- optional agent workspace artifacts
-tasks/                         -- benchmark tasks, typically added in benchmark-specific branches
-jobs/                          -- Harbor job outputs
-results.tsv                    -- experiment log (created by meta-agent, gitignored)
-run.log                        -- latest run output
-```
-
-## Task format
-
-The repo ships without tasks. Add your own to `tasks/` following [Harbor's task format](https://harborframework.com/docs/tasks):
-
-```text
-tasks/my-task/
-  task.toml           -- config (timeouts, metadata)
-  instruction.md      -- prompt sent to the agent
-  tests/
-    test.sh           -- entry point, writes /logs/reward.txt
-    test.py           -- verification (deterministic or LLM-as-judge)
-  environment/
-    Dockerfile        -- task container (FROM autoagent-base)
-  files/              -- reference files mounted into container
-```
-
-Tests write a score (0.0-1.0) to the verifier logs. The meta-agent hill-climbs
-on this. See the [Harbor docs](https://harborframework.com/docs) for full details on writing and porting tasks.
-
-## Design choices
-
-- **Program the meta-agent, not the harness directly.** The human steers the
-  loop through `program.md`, while the meta-agent edits `agent.py`.
-- **Single-file, registry-driven harness.** The implementation lives in one
-  file for simplicity, but agent and tool registration stay structured so the
-  harness can still evolve cleanly.
-- **Docker isolation.** The agent runs in a container. It can't damage the host.
-- **Score-driven.** Every experiment produces a numeric score. Keep if better,
-  discard if not. Same loop as autoresearch.
-- **Harbor-compatible tasks.** Tasks use the same format as harbor benchmarks,
-  so the same harness can be evaluated on different datasets.
-
-## Cleanup
-
-Docker images and containers accumulate across runs. Clean up regularly:
+For teams with multiple repos forming a larger system:
 
 ```bash
-# Harbor's cached task images + task cache
-uv run harbor cache clean -f
-
-# Full Docker nuke (all unused images, build cache, etc.)
-docker system prune -a -f
-
-# Lighter: just dead containers
-docker container prune -f
+> /org-sync init      # set up org blueprint + component registry
+> /org-sync add       # register a new component/repo
+> /org-sync update    # refresh status across all components
+> /org-sync check X   # deep health check on one component
 ```
 
-If Docker becomes unresponsive (for example after many concurrent runs), restart
-Docker Desktop:
+Every project's agent knows:
+- The big picture (architecture, vision)
+- Its own role and dependencies
+- Upstream/downstream component status
 
-```bash
-killall Docker && open -a Docker
+Blueprint lives in `~/.claude/org/` — never committed to repos, always available locally.
+
+## Project Structure
+
+```
+skills/
+  evolve/SKILL.md        # self-evolution cycle skill
+  evaluate/SKILL.md      # multi-dimension evaluation skill
+  org-sync/SKILL.md      # organization context skill
+  init/SKILL.md          # interactive onboarding skill
+agent-config.yaml        # agent "DNA" — strategies, thresholds, evolution params
+install.sh               # global installer
+docs/                    # design docs, vendor analysis
+vendor/                  # reference framework submodules (read-only)
 ```
 
-## Improving performance with skills
+## Agent Config
 
-You can equip the agent with [Agent Skills for Context Engineering](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering) and [context7](https://github.com/upstash/context7) skills to improve performance.
+`agent-config.yaml` is the agent's DNA. It tracks:
+
+- **Strategies** with success rates and usage counts (updated automatically)
+- **Evaluation thresholds** (correctness gate, memory write triggers)
+- **Evolution parameters** (meta-review interval, memory scope)
+
+The agent reads this before every cycle and writes back improvements after.
+
+## Design Principles
+
+- **No API key required.** Everything runs as Claude Code skills — just a subscription.
+- **Learn from reference frameworks.** Borrows from HyperAgents (recursive self-improvement), DGM (evolutionary archive), SWE-agent (harness design), GPTSwarm (strategy optimization), MetaBot (memory systems).
+- **Correctness gates everything.** Wrong output can't score high, no matter how elegant.
+- **Memory is selective.** Only novel, reusable learnings get saved. Trivial wins are skipped.
+- **Org context is read-only.** Never injected into committed files. No path leaks.
+
+## Vendor Research
+
+See [docs/vendor-analysis.md](docs/vendor-analysis.md) for detailed analysis of 8 reference frameworks and what Agent24 borrows from each.
+
+## Global vs Project Install
+
+- **Global install** (`bash install.sh`): Skills available in every project. Config at `~/.claude/`.
+- **Project-level**: Clone this repo, use skills directly. Config at `./agent-config.yaml`.
+
+See [docs/usage-scope.md](docs/usage-scope.md) for details.
 
 ## License
 
 MIT
-
