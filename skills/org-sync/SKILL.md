@@ -1,169 +1,151 @@
 ---
 name: org-sync
-description: "Sync and display organization-level context: blueprint, components, dependencies, and cross-repo status. Use /org-sync to check org status, or /org-sync update to refresh from repos."
+description: "Sync and display organization-level context: blueprint, components, dependencies, and cross-repo status. Use /org-sync to check org status, or /org-sync init to set up your org."
 ---
 
-You manage the **organization-level shared context** system. This ensures every project's agent knows:
-- The big picture (blueprint)
-- Its own role and responsibility
-- Upstream/downstream dependencies
-- Cross-repo progress and status
+You manage the **organization-level shared context** system. This ensures every project's agent knows the big picture, its role, and its dependencies.
 
 Command: $ARGUMENTS
 
-## What This System Does
+## File Locations
 
-Your open-source org has multiple repos/products that form a larger system. Instead of explaining context every time you work on a component, this system maintains a shared "org brain" at `~/.claude/org/`.
-
-## File Structure
+All org context lives in `~/.claude/org/` (global, not committed to any repo):
 
 ```
 ~/.claude/org/
-├── blueprint.md          ← The big picture: vision, architecture, how pieces fit together
-├── components.yaml       ← Registry of all components: repos, owners, status, dependencies
-└── status.md             ← Live status: what's passing, what's blocked, recent changes
+├── blueprint.md          ← Vision, architecture, how pieces fit together (< 2000 tokens)
+├── components.yaml       ← Registry of all components with dependencies
+└── status.md             ← Auto-generated status snapshot (ephemeral, regeneratable)
 ```
+
+**Important:** Org context is NEVER injected into project CLAUDE.md files. It's read on-demand by skills that need it. This avoids leaking local paths into committed files.
 
 ## Commands
 
 ### `/org-sync` (no args) — Show Current Context
 
-1. Read `~/.claude/org/blueprint.md` and summarize the big picture
-2. Read `~/.claude/org/components.yaml` and show component map
-3. Identify current project's role (match cwd to component registry)
-4. Show this project's upstream/downstream dependencies and their status
-5. Highlight any blockers or cross-repo issues
+1. Read `~/.claude/org/blueprint.md` — summarize big picture
+2. Read `~/.claude/org/components.yaml` — parse component registry
+3. Match current working directory to a component (compare `cwd` with `local_path` values)
+4. Show this project's upstream/downstream and their status
 
-Output format:
+Output:
 ```
 ## Org Context: {org name}
 
 **Blueprint:** {one-line vision}
-**You are in:** {component name} — {role description}
+**Current component:** {name} — {role}
 
-### Dependencies
-| Direction | Component | Repo | Status | Notes |
-|-----------|-----------|------|--------|-------|
-| ⬆ upstream | ... | ... | ✅/⚠️/❌ | ... |
-| ⬇ downstream | ... | ... | ✅/⚠️/❌ | ... |
-
-### Cross-Repo Status
-- {component}: {status summary}
-- ...
-
-### Blockers
-- {any cross-repo blockers affecting this project}
+| Direction | Component | Status | Notes |
+|-----------|-----------|--------|-------|
+| upstream | {name} | {status} | {notes} |
+| downstream | {name} | {status} | {notes} |
 ```
 
-### `/org-sync update` — Refresh Status
-
-For each component in `components.yaml` that has a local path:
-1. Check if the repo exists locally
-2. Run `git -C {path} log --oneline -3` to see recent activity
-3. Check for CI status if available (gh CLI)
-4. Update `status.md` with findings
+If org context doesn't exist, suggest running `/org-sync init`.
 
 ### `/org-sync init` — Initialize Org Context
 
-Interactive setup:
-1. Ask for org name and vision (one sentence)
-2. Ask for the first component (this repo)
-3. Create `blueprint.md` and `components.yaml` with initial content
-4. Guide user to add more components
+1. Ask for: org name, one-sentence vision
+2. Ask for: first component (this repo) — name, role, description
+3. Create `~/.claude/org/` directory (use Bash: `mkdir -p ~/.claude/org`)
+4. Write `blueprint.md` and `components.yaml` with initial content
+5. Guide user to add more components with `/org-sync add`
 
-### `/org-sync add {component}` — Add a Component
+### `/org-sync add` — Add a Component
 
-Add a new component to the registry:
-1. Ask for: name, repo URL, local path, description, role
-2. Ask for: upstream dependencies, downstream dependents
-3. Update `components.yaml`
-4. Update `blueprint.md` if the architecture description needs adjustment
+1. Ask for: component name, repo URL, local path (optional), description, role
+2. Ask for: upstream dependencies (list of component names), downstream dependents
+3. Read existing `components.yaml`, append the new component
+4. Update `blueprint.md` component list if needed
 
-### `/org-sync check {component}` — Deep Check a Component
+**Path validation:** If `local_path` is provided:
+- It MUST be an absolute path starting with `/`
+- Reject paths containing `$`, backticks, `"`, `'`, `\`, or newlines (these enable injection)
+- Verify it exists using the Read tool or `test -d` with the path passed as a variable, not interpolated
+- If validation fails, report the issue and do not add the component
 
-1. Go to the component's local path
-2. Read its CLAUDE.md, README.md, package.json/pyproject.toml
-3. Check test status, recent commits, open issues
-4. Report back with health assessment
+### `/org-sync update` — Refresh Status
 
-## Blueprint Format (`blueprint.md`)
+For each component in `components.yaml` that has a `local_path`:
+1. Read the path from YAML using the Read tool (never parse YAML with shell)
+2. Validate: must start with `/`, must not contain `$`, backticks, `"`, `'`, or `\`
+3. Verify it's a git repo: use Bash with path stored in a shell variable:
+   ```bash
+   path='/absolute/path/here'
+   test -e "$path/.git" && git -C "$path" log --oneline -3
+   ```
+4. If `.git` doesn't exist (not a file or directory), skip it and note in status.md
+5. Write findings to `~/.claude/org/status.md`
+
+**Security:** NEVER interpolate paths directly into command strings. Always assign to a shell variable first and reference with `"$var"`. This prevents command injection even with adversarial paths.
+
+### `/org-sync check {component}` — Deep Check One Component
+
+1. Find component in `components.yaml`
+2. If `local_path` exists, read its CLAUDE.md, README.md, and check recent git activity
+3. Report health: recent commits, test status, open issues
+
+## Blueprint Format
+
+Keep under 2000 tokens. This is loaded into context by other skills.
 
 ```markdown
-# {Org Name} Blueprint
+# {Org Name}
 
 ## Vision
-{One paragraph: what the org is building overall}
+{One paragraph — what the org is building}
 
 ## Architecture
-{How the pieces fit together — data flow, dependency layers}
+{How pieces fit together — data flow, dependency layers}
+{Use a simple ASCII diagram if helpful}
 
 ## Components
-{Brief description of each component's role — NOT duplicating components.yaml}
+{Brief role of each — one line per component, NOT duplicating components.yaml}
 
-## Shared Conventions
-{Common patterns across repos: language, framework, deploy, testing}
-
-## Key Resources
-- Contracts repo: {url}
-- SDK repo: {url}
+## Shared Resources
+- Contracts: {repo url}
+- SDK: {repo url}
 - Docs: {url}
-- CI Dashboard: {url}
 ```
 
-## Components Registry Format (`components.yaml`)
+## Components Registry Format
 
 ```yaml
 org: "{org name}"
+schema_version: 1
 
 components:
   component-name:
     repo: "https://github.com/org/repo"
-    local_path: "~/Dev/org/repo"       # optional, for local checks
+    local_path: "/absolute/path/to/repo"   # optional, must be absolute
     description: "What this component does"
     role: "Brief role in the system"
-    owner: "team or person"
-    status: "active"                    # active | wip | planned | deprecated
-    upstream:                           # what this depends on
-      - component-a
-      - component-b
-    downstream:                         # what depends on this
-      - component-c
-    shared_resources:                   # resources other components should know about
-      contracts: "src/contracts/"
-      sdk: "packages/sdk/"
-      api_docs: "docs/api.md"
+    status: "active"                        # active | wip | planned | deprecated
+    upstream:                               # component names this depends on
+      - other-component
+    downstream:                             # component names that depend on this
+      - another-component
 
 shared:
   contracts_repo: "https://github.com/org/contracts"
   sdk_repo: "https://github.com/org/sdk"
-  test_infra: "https://github.com/org/test-infra"
-  ci_dashboard: "https://..."
 ```
 
-## How Other Skills Use This
+## Gotchas
 
-The `/evolve` skill reads org context in Phase 0. This means when you run `/evolve` in any project:
-- It knows the project's role in the larger system
-- It knows what upstream components it depends on
-- It can check if upstream components recently changed (potential breakage)
-- It can avoid changes that would break downstream consumers
+- **Don't inject org context into CLAUDE.md.** Org data is local/global only. Committing it leaks paths and creates merge conflicts across team members.
+- **Don't use `~` in local_path.** Use absolute paths (`/Users/...` or `/home/...`). Tilde expansion is unreliable in many contexts.
+- **Reject dangerous path characters.** Paths containing `$`, backticks, `"`, `'`, or `\` must be rejected at write-time. These enable command injection.
+- **Never interpolate paths into command strings.** Always use shell variables: `path='/foo'; git -C "$path" log`. Never `git -C "/foo" log` where `/foo` came from YAML.
+- **Check for .git before running git commands.** A valid directory isn't necessarily a git repo. Use `test -e "$path/.git"` (not `-d`, because worktrees/submodules use a `.git` file).
+- **Don't parse YAML with shell tools.** Use the Read tool to read `components.yaml`, then parse the content. Never `cat | grep` YAML.
+- **Keep blueprint under 2000 tokens.** It's loaded by /evolve on every cycle. If it's too long, it wastes context budget.
+- **status.md is ephemeral.** It can be deleted and regenerated anytime. Don't put important decisions there.
+- **Dependencies are component names, not paths.** Always reference by the key in `components:`, never by path or URL.
 
-## Auto-injection into CLAUDE.md
+## Integration
 
-When `/org-sync init` runs, it adds a reference to the current project's CLAUDE.md:
-
-```markdown
-## Org Context
-This project is part of {org name}. See `~/.claude/org/blueprint.md` for the full architecture.
-Role: {role}. Upstream: {list}. Downstream: {list}.
-```
-
-This ensures every Claude Code session in this project automatically knows its place.
-
-## Rules
-
-- NEVER overwrite user edits to blueprint.md — merge carefully
-- Components.yaml is the source of truth for structure
-- Status.md is ephemeral and can be regenerated anytime
-- Keep blueprint concise — it's injected into every session's context
-- If a component's local repo doesn't exist, skip it gracefully
+- `/evolve` reads `blueprint.md` in Phase 0 to understand project boundaries
+- `/evaluate` uses org context for architecture dimension scoring
+- All three skills share the same memory system in `~/.claude/memory/`

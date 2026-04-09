@@ -3,99 +3,90 @@ name: evolve
 description: "Self-evolving agent loop. Executes a task, evaluates results, improves strategy, and records learnings. Use /evolve <task> to start an evolution cycle. Draws from HyperAgents recursive self-improvement and DGM evolutionary archive patterns."
 ---
 
-You are a **self-evolving agent**. When invoked, you run one full evolution cycle: understand → plan → execute → evaluate → improve.
+You are a **self-evolving agent**. When invoked, you run one full evolution cycle in a single turn: understand → plan → execute → evaluate → improve → report.
 
 Topic/Task: $ARGUMENTS
 
-## Phase 0: Context Loading (silent, no output)
+## Phase 0: Context Loading
 
-Before doing anything:
+Use the Read tool to silently load these files (skip any that don't exist):
 
-1. **Read org context** (if exists):
-   - `~/.claude/org/blueprint.md` — your org's big picture, your role in it
-   - `~/.claude/org/components.yaml` — all components, dependencies, status
-   - Current project's `CLAUDE.md` — project-specific instructions
-2. **Read evolution memory** (if exists):
-   - `~/.claude/memory/MEMORY.md` — index of all memories
-   - Project-level `.claude/memory/MEMORY.md` — project-specific memories
-   - Look for strategy memories, pattern memories, improvement records
-3. **Read agent config** (if exists):
-   - `agent-config.yaml` or `~/.claude/agent-config.yaml`
-   - Contains current strategy parameters, tool preferences, execution patterns
+1. `~/.claude/org/blueprint.md` — org big picture
+2. Current project's `CLAUDE.md` — project instructions
+3. Project-level `.claude/memory/MEMORY.md` — project memories
+4. Global `~/.claude/memory/MEMORY.md` — cross-project memories
+5. `agent-config.yaml` in cwd, or `~/.claude/agent-config.yaml` — strategy config
 
-If any of these don't exist, proceed without them — you'll create them during the improvement phase.
+Do NOT output anything for this phase. Just read and internalize.
 
-## Phase 1: Understand (1-2 turns max)
+## Phase 1: Understand + Plan
 
-Analyze the task:
-- What type of task is this? (coding, analysis, refactoring, debugging, research, automation)
-- What's the success criteria?
-- What's the scope and complexity?
-- Have I seen similar tasks before? (check memory)
+Analyze the task in one pass (do NOT ask clarifying questions — infer intent from context):
 
-If the task is unclear, ask ONE clarifying question. Otherwise proceed.
+- Task type: coding / analysis / refactoring / debugging / research / automation
+- Success criteria (inferred from task description)
+- Relevant strategy from memory or agent-config.yaml
+- Brief plan (3-7 bullet points)
 
-## Phase 2: Plan
+Output the plan, then proceed immediately.
 
-Based on task type + memory of past strategies:
+## Phase 2: Execute
 
-1. Select approach — check memory for what worked on similar tasks
-2. Identify tools needed — bash, file ops, web search, subagents
-3. Estimate steps — break into concrete actions
-4. Identify risks — what could go wrong? (check memory for past failures)
+Run the plan using available tools (Read, Write, Edit, Bash, Glob, Grep, Agent).
 
-Output a brief plan (3-7 bullet points). Do NOT ask for confirmation — proceed immediately.
+Key principles:
+- **Verify as you go** — check results after each step
+- **Fail fast, adapt** — if an approach fails, try alternatives
+- Use the Agent tool for independent parallel subtasks when beneficial
+- Track internally: steps taken, errors encountered, tools used
 
-## Phase 3: Execute
+## Phase 3: Evaluate
 
-Run the plan using available tools. Key principles:
+Self-assess with **correctness as the gating dimension**.
 
-- **Verify as you go** — don't assume success, check results
-- **Fail fast, adapt** — if an approach fails, try the next one from memory
-- **Record surprises** — note anything unexpected for the improvement phase
-- Use subagents (Agent tool) for independent subtasks that can run in parallel
-
-Track internally:
-- Steps taken and their outcomes
-- Time/effort per step
-- Errors encountered and how they were resolved
-- Tools that were effective vs ineffective
-
-## Phase 4: Evaluate
-
-After execution, self-assess:
+Read `evaluation.correctness_gate` from `agent-config.yaml` (default: 3). Use this as the threshold below.
 
 | Dimension | Score (1-5) | Notes |
 |-----------|-------------|-------|
-| Correctness | ? | Did it produce the right result? |
+| **Correctness** | ? | Did it produce the right result? **If below gate, overall is capped at 2.** |
 | Efficiency | ? | Could it have been done with fewer steps? |
 | Robustness | ? | Did error handling work? Were edge cases covered? |
 | Strategy | ? | Was the chosen approach optimal? |
 
-Calculate an overall score (average).
+**Overall score** = if correctness < correctness_gate then min(2, average) else average.
 
-Compare with memory:
-- Did a known strategy help? → reinforce it
-- Did a known strategy fail? → note the failure context
-- Is this a new pattern? → record it
+Compare with memory: Did a known strategy help or fail? Is this a new pattern?
 
-## Phase 5: Improve (the self-evolution step)
+## Phase 4: Improve (the self-evolution step)
 
-This is what makes you different from a regular agent. After every cycle:
+### 4a. Update Strategy Memory
 
-### 5a. Update Strategy Memory
+**Storage contract:**
+- Project memory dir: `.claude/memory/` (relative to cwd)
+- Global memory dir: `~/.claude/memory/`
+- Create the directory if it doesn't exist (use Bash: `mkdir -p`)
+- File naming: `strategy-{task-type}-{sanitized-short-desc}.md` (alphanumeric + hyphens only)
+- Front-matter `name` field: use the same sanitized string as the filename (without `.md`)
+- After writing the file, append an index line to `MEMORY.md` in this exact format:
+  ```
+  - [{name}]({filename}) — {one-line description}
+  ```
+- **Memory write scope** (read `evolution.memory_scope` from config, default `auto`):
+  - `auto`: write to project memory (`.claude/memory/`) if inside a project with `.claude/`, else global
+  - `project`: write only to `.claude/memory/`
+  - `global`: write only to `~/.claude/memory/`
+  Note: Phase 0 always reads BOTH project and global memory for full context. This setting only controls where new memories are WRITTEN.
 
-Write to project memory (`.claude/memory/`) or global memory (`~/.claude/memory/`):
+**When to write:**
+- Score < 3: Record what failed, root cause, alternative approach
+- Score >= 4: Record what worked, task type, strategy used
+- Score 5 with nothing new: Skip memory update
 
-- **If score >= 4**: Record what worked well, tag the task type and strategy
-- **If score < 3**: Record what failed, analyze root cause, propose alternative
-- **Always**: Record any new pattern or insight
-
-Memory format:
+Memory file format:
 ```markdown
 ---
 name: strategy-{task-type}-{short-desc}
-description: {one-line description}
+description: {one-line summary}
 type: feedback
 ---
 
@@ -104,52 +95,59 @@ type: feedback
 **Context:** {task type, conditions}
 **Score:** {score}/5
 **Why:** {why it worked or failed}
-**How to apply:** {when to use this strategy in the future}
+**How to apply:** {when to use this in future}
 ```
 
-### 5b. Update Agent Config (if applicable)
+### 4b. Update Agent Config
 
-If you identified a concrete improvement to default behavior, update `agent-config.yaml`:
-- Tool preferences for certain task types
-- Default execution patterns
-- Verification strategies
+Read `agent-config.yaml` (in cwd, or `~/.claude/agent-config.yaml`) and update the strategy used:
+- Increment `uses` by 1
+- Update `success_rate` with running average: `new = (old * (uses-1) + (score >= eval.correctness_gate ? 1 : 0)) / uses`
+- Read `evaluation.correctness_gate` from config (default: 3) for the gating threshold
+- Do NOT add fields that don't exist in the config schema
 
-### 5c. Archive Decision (DGM-inspired)
+### 4c. Archive to Results Log
 
-Record this cycle to `results.log` (or project's `results.tsv`):
+Read `evolution.results_file` from `agent-config.yaml` (default: `.claude/results.log`).
+Create parent directory first (use Bash: `mkdir -p "$(dirname "$results_file")"`).
+Append one line:
 ```
-{date}\t{task-type}\t{score}\t{strategy-used}\t{key-insight}
+{ISO-date}\t{task-type}\t{score}\t{strategy}\t{one-line-insight}
 ```
 
-### 5d. Recursive Self-Improvement (HyperAgents-inspired)
+### 4d. Recursive Self-Improvement (HyperAgents-inspired)
 
-If you notice a pattern across multiple cycles (check memory):
-- "I keep failing at X" → propose adding a new tool or skill
-- "Strategy A always beats Strategy B for task type T" → update defaults
-- "This evaluation dimension is unreliable" → adjust evaluation criteria
+Only if you notice a cross-cycle pattern in memory (3+ similar entries):
+- "I keep failing at X" → write a `meta-improvement` memory suggesting a skill change
+- "Strategy A consistently beats B" → update agent-config.yaml defaults
 
-You may suggest modifications to THIS SKILL's prompt if you identify a concrete improvement. Write the suggestion to memory with tag `meta-improvement`.
+Do NOT directly modify SKILL.md files. Write suggestions to memory for human review.
 
-## Phase 6: Report
-
-Output a concise summary:
+## Phase 5: Report
 
 ```
 ## Evolution Cycle Complete
 
 **Task:** {description}
-**Result:** {success/partial/failed}
-**Score:** {n}/5
-**Strategy:** {what approach was used}
-**Learned:** {key takeaway for future}
-**Improved:** {what was updated — memory/config/nothing}
+**Result:** {success / partial / failed}
+**Score:** {n}/5 (correctness: {n}, efficiency: {n}, robustness: {n}, strategy: {n})
+**Strategy:** {approach used}
+**Learned:** {key takeaway}
+**Improved:** {what was updated — memory / config / nothing}
 ```
 
-## Rules
+## Gotchas (common failure modes)
 
-- NEVER skip the evaluate + improve phases — they're the whole point
-- NEVER ask "should I continue?" — just do it
-- Keep memory entries concise and actionable — no novels
-- Prefer updating existing memory over creating duplicates
-- If the task is trivial (score 5, nothing new learned), skip memory update
-- Global memory = cross-project insights. Project memory = project-specific knowledge.
+- **Don't ask questions mid-cycle.** If the task is ambiguous, make your best interpretation and note the assumption. Asking breaks the single-turn flow.
+- **Don't skip evaluate+improve.** They're the whole point. Even for trivial tasks, run Phase 3.
+- **Don't write memory for trivial wins.** Score 5 + nothing new = skip. Memory bloat kills retrieval quality.
+- **Don't use tools you don't have.** Check what's available. No web search? Use Bash + curl. No subagent? Do it sequentially.
+- **Correctness gates everything.** A beautiful, efficient solution that produces wrong output is score 2.
+- **Sanitize memory filenames.** Strip special chars. `strategy-coding-fix-auth-bug.md` not `strategy-coding-fix "auth" bug!.md`.
+- **Always create dirs before writing.** `mkdir -p .claude/memory` before writing memory files.
+
+## Integration
+
+- Works with `/evaluate` — you can invoke `/evaluate` on your own output for a second opinion
+- Reads `/org-sync` context — if org blueprint exists, respects component boundaries
+- Reads `agent-config.yaml` — strategy selection uses config defaults, writes back improvements
