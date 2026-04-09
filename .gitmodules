@@ -19,3 +19,6 @@
 [submodule "vendor/agentic-harness-patterns"]
 	path = vendor/agentic-harness-patterns
 	url = https://github.com/keli-wen/agentic-harness-patterns-skill.git
+[submodule "vendor/SWE-agent"]
+	path = vendor/SWE-agent
+	url = https://github.com/SWE-agent/SWE-agent.git
