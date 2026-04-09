@@ -83,8 +83,8 @@ SETTINGS_FILE="${CLAUDE_DIR}/settings.json"
 SAVE_HOOK="${HOOKS_TARGET}/agent24-save-hook.sh"
 PRECOMPACT_HOOK="${HOOKS_TARGET}/agent24-precompact-hook.sh"
 
-# Only add hooks if settings.json doesn't already have agent24 hook paths
-if [ -f "$SETTINGS_FILE" ] && grep -q "agent24-save-hook" "$SETTINGS_FILE" 2>/dev/null; then
+# Only add hooks if BOTH agent24 hooks are already configured
+if [ -f "$SETTINGS_FILE" ] && grep -q "agent24-save-hook" "$SETTINGS_FILE" 2>/dev/null && grep -q "agent24-precompact-hook" "$SETTINGS_FILE" 2>/dev/null; then
     echo -e "  ${YELLOW}~${NC} Skipped: hooks already configured in settings.json"
 else
     if [ -f "$SETTINGS_FILE" ]; then

@@ -198,7 +198,7 @@ Do NOT directly modify SKILL.md files. Write suggestions to memory for human rev
 After writing or skipping memory, regenerate `~/.claude/memory/essential.md`:
 
 1. Read `~/.claude/memory/MEMORY.md` and `.claude/memory/MEMORY.md` indexes (not full files — just the index lines). Cap at 100 entries total.
-2. For entries with `importance >= 4`, Read just their front-matter (first 10 lines) to check `valid_to == null`
+2. For entries with `importance >= 4`, Read just their front-matter (lines between the opening `---` and closing `---`) to check `valid_to == null`
 3. Sort by importance (desc), then by created date (desc)
 4. Take top 10 entries
 5. Write `essential.md` with one line per entry: `- [{name}]: {description} (score: {importance})`
