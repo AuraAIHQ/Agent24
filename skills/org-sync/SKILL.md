@@ -86,6 +86,68 @@ For each component in `components.yaml` that has a `local_path`:
 2. If `local_path` exists, read its CLAUDE.md, README.md, and check recent git activity
 3. Report health: recent commits, test status, open issues
 
+### `/org-sync repo {url}` — Connect Org Context to a Shared Git Repo
+
+**Problem:** `~/.claude/org/` is local-only. Team members need to share blueprint and components.
+
+**Solution:** Use a shared git repo as the source of truth for org context.
+
+1. Validate URL: must start with `https://` or `git@`. Reject URLs containing `$`, backticks, `"`, `'`, `\`, newlines, `;`, `&`, `|`, or whitespace (except in `git@host:path` format).
+2. If `~/.claude/org/` already has `.git`: assign URL to variable, then update remote: `url='validated-url'; git -C ~/.claude/org remote set-url origin "$url"`
+3. If `~/.claude/org/` exists but is NOT a git repo:
+   - Generate unique backup name: `backup_dir="$HOME/.claude/org.bak.$(date +%s)"`
+   - Back up: `mv ~/.claude/org/ "$backup_dir"`
+   - Clone: assign URL to variable first: `url='...'; git clone "$url" ~/.claude/org/`
+   - If clone fails: `rm -rf ~/.claude/org/ ; mv "$backup_dir" ~/.claude/org/` and report error
+   - If clone succeeds: `cp -rn "$backup_dir"/. ~/.claude/org/ 2>/dev/null && rm -rf "$backup_dir"` (copies dotfiles too; only deletes backup if copy succeeds)
+4. If `~/.claude/org/` doesn't exist: `url='validated-url'; git clone "$url" ~/.claude/org/`
+5. Report: "Org context now synced to {url}"
+
+### `/org-sync pull` — Pull Latest Org Context from Shared Repo
+
+1. Check `~/.claude/org/` is a git repo (`test -e ~/.claude/org/.git`)
+2. If not: report "Org context is not connected to a repo. Run `/org-sync repo {url}` first."
+3. If yes: `git -C ~/.claude/org pull --rebase`
+4. Report changes: what files were updated
+
+### `/org-sync push` — Push Local Changes to Shared Repo
+
+1. Check `~/.claude/org/` is a git repo
+2. Check for uncommitted changes: `git -C ~/.claude/org status --porcelain`
+3. If changes exist:
+   - Stage: `git -C ~/.claude/org add -A`
+   - Commit (safe quoting): `host=$(hostname); git -C ~/.claude/org commit -m "org-sync: update from $host"`
+   - Push: `git -C ~/.claude/org push`
+4. Report what was pushed
+
+**Security:**
+- URL must start with `https://` or `git@` — reject all other schemes
+- Reject URLs containing: `$`, backticks, `"`, `'`, `\`, newlines, `;`, `&`, `|`, or spaces
+- Always assign URL to a shell variable and quote it: `url='...'; git clone "$url" ...`
+- Commit message uses a fixed format — hostname is passed via variable, never interpolated:
+  ```bash
+  host=$(hostname)
+  git -C ~/.claude/org commit -m "org-sync: update from $host"
+  ```
+
+### Team Workflow
+
+```
+Founder:
+  /org-sync init          → create blueprint + components.yaml
+  /org-sync repo {url}    → push to shared repo
+
+New member:
+  /org-sync repo {url}    → clone shared org context
+  /init                   → personal setup (identity, preferences)
+  /org-sync add           → register their component
+
+Any member:
+  /org-sync pull          → get latest from team
+  /org-sync update        → refresh status
+  /org-sync push          → share changes back
+```
+
 ## Blueprint Format
 
 **Hard limit: < 2000 tokens.** This is loaded into context by /evolve on every cycle (Phase 0). Brevity is critical — every extra token here competes with task context.

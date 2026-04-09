@@ -7,17 +7,30 @@ You are a **self-evolving agent**. When invoked, you run one full evolution cycl
 
 Topic/Task: $ARGUMENTS
 
-## Phase 0: Context Loading
+## Phase 0: Context Loading (Layered, MemPalace-inspired)
 
-Use the Read tool to silently load these files (skip any that don't exist):
+Load context in layers — cheap layers always, expensive layers on-demand:
 
-1. `~/.claude/org/blueprint.md` — org big picture
-2. Current project's `CLAUDE.md` — project instructions
-3. Project-level `.claude/memory/MEMORY.md` — project memories
-4. Global `~/.claude/memory/MEMORY.md` — cross-project memories
-5. `agent-config.yaml` in cwd, or `~/.claude/agent-config.yaml` — strategy config
+### Layer 0 — Identity + Config (always load, < 200 tokens)
+1. `~/.claude/memory/identity.md` — who is the user (created by /init)
+2. `agent-config.yaml` in cwd, or `~/.claude/agent-config.yaml` — strategy config
+
+### Layer 1 — Essential Story (always load, < 500 tokens)
+3. `~/.claude/memory/essential.md` — auto-generated summary of top memories
+4. `~/.claude/org/blueprint.md` — org big picture (< 2000 tokens)
+5. Current project's `CLAUDE.md` — project instructions
+
+### Layer 2 — Relevant Memories (selective load)
+6. Read `~/.claude/memory/MEMORY.md` **index only** — scan one-line descriptions
+7. Read `.claude/memory/MEMORY.md` **index only** — scan project memory descriptions
+8. Only Read full memory files whose descriptions match the current task type or topic. Skip irrelevant ones. This keeps context budget tight.
+
+### Layer 3 — Deep Search (only if needed)
+If Phase 1 planning reveals a knowledge gap, use Grep to search across all memory files for relevant content.
 
 Do NOT output anything for this phase. Just read and internalize.
+
+**Budget rule:** L0 should stay under 200 tokens. L1 files (essential.md + blueprint + CLAUDE.md) are loaded in full but each has its own cap (essential < 500 tokens, blueprint < 2000 tokens). L2 adds only what's relevant. The goal is to minimize total context loading while keeping critical info available.
 
 ## Phase 1: Understand + Plan
 
@@ -115,12 +128,16 @@ This label is used by Phase 4b (success_rate) and Phase 4c (archive).
 3. Overall score >= `min_score_to_keep` AND result is `"success"`: Record what **worked**, task type, strategy used
 4. Otherwise (partial results, mid-range scores): Write only if a genuinely new insight emerged
 
-Memory file format:
+Memory file format (with temporal fields):
 ```markdown
 ---
 name: strategy-{task-type}-{short-desc}
 description: {one-line summary}
 type: feedback
+created: "{ISO-date}"
+valid_from: "{ISO-date}"
+valid_to: null                    # null = still valid; set date when obsolete
+importance: {1-5}                 # 5 = critical insight, 1 = minor note
 ---
 
 {Strategy description}
@@ -175,6 +192,21 @@ Only if you notice a cross-cycle pattern in memory (3+ similar entries):
 - "Strategy A consistently beats B" → update agent-config.yaml defaults
 
 Do NOT directly modify SKILL.md files. Write suggestions to memory for human review.
+
+### 4e. Update Essential Story (MemPalace L1-inspired)
+
+After writing or skipping memory, regenerate `~/.claude/memory/essential.md`:
+
+1. Read `~/.claude/memory/MEMORY.md` and `.claude/memory/MEMORY.md` indexes (not full files — just the index lines). Cap at 100 entries total.
+2. For entries with `importance >= 4`, Read just their front-matter (lines between the opening `---` and closing `---`) to check `valid_to == null`
+3. Sort by importance (desc), then by created date (desc)
+4. Take top 10 entries
+5. Write `essential.md` with one line per entry: `- [{name}]: {description} (score: {importance})`
+6. Keep total under 500 tokens — truncate if needed
+
+This file is loaded in every Phase 0 (L1). It gives the agent a quick snapshot of the most important learnings without reading every memory file.
+
+**Skip this step if no memory was written in 4a** (nothing changed, essential.md is still current).
 
 ## Phase 5: Report
 

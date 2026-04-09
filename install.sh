@@ -41,8 +41,22 @@ for skill_dir in "${SCRIPT_DIR}/skills"/*/; do
     cp -r "${skill_dir}". "$target/" 2>/dev/null || cp -r "${skill_dir}"* "$target/"
 done
 
+# --- Install Hooks ---
+echo -e "${GREEN}[2/5] Installing hooks...${NC}"
+
+HOOKS_TARGET="${CLAUDE_DIR}/hooks"
+mkdir -p "$HOOKS_TARGET"
+
+for hook_file in "${SCRIPT_DIR}/hooks"/*.sh; do
+    [ -f "$hook_file" ] || continue
+    hook_name=$(basename "$hook_file")
+    cp "$hook_file" "${HOOKS_TARGET}/${hook_name}"
+    chmod +x "${HOOKS_TARGET}/${hook_name}"
+    echo -e "  ${GREEN}+${NC} Installed: ${hook_name}"
+done
+
 # --- Install Agent Config (template only, don't overwrite) ---
-echo -e "${GREEN}[2/3] Installing agent config...${NC}"
+echo -e "${GREEN}[3/5] Installing agent config...${NC}"
 
 if [ ! -f "${CLAUDE_DIR}/agent-config.yaml" ]; then
     cp "${SCRIPT_DIR}/agent-config.yaml" "${CLAUDE_DIR}/agent-config.yaml"
@@ -52,7 +66,7 @@ else
 fi
 
 # --- Initialize Org Context (directory only, don't overwrite) ---
-echo -e "${GREEN}[3/3] Preparing org context...${NC}"
+echo -e "${GREEN}[4/5] Preparing org context...${NC}"
 
 if [ ! -d "$ORG_DIR" ]; then
     mkdir -p "$ORG_DIR"
@@ -61,6 +75,77 @@ if [ ! -d "$ORG_DIR" ]; then
 else
     echo -e "  ${YELLOW}~${NC} Skipped: ~/.claude/org/ (already exists)"
 fi
+
+# --- Configure Hook Settings ---
+echo -e "${GREEN}[5/5] Configuring hooks...${NC}"
+
+SETTINGS_FILE="${CLAUDE_DIR}/settings.json"
+SAVE_HOOK="${HOOKS_TARGET}/agent24-save-hook.sh"
+PRECOMPACT_HOOK="${HOOKS_TARGET}/agent24-precompact-hook.sh"
+
+# Remove any existing agent24 hooks before adding fresh ones (prevents duplicates)
+if [ -f "$SETTINGS_FILE" ] && grep -q "agent24-" "$SETTINGS_FILE" 2>/dev/null; then
+    echo -e "  ${YELLOW}↻${NC} Removing existing agent24 hooks (will re-add fresh)"
+    SETTINGS_PATH="$SETTINGS_FILE" python3 -c '
+import json, os
+sf = os.environ["SETTINGS_PATH"]
+with open(sf) as f:
+    settings = json.load(f)
+hooks = settings.get("hooks", {})
+for event in ["Stop", "PreCompact"]:
+    if event in hooks:
+        cleaned = []
+        for entry in hooks[event]:
+            # Filter out only agent24 commands, keep other commands in same entry
+            inner = entry.get("hooks", [])
+            inner = [h for h in inner if "agent24-" not in str(h.get("command", ""))]
+            if inner:
+                entry["hooks"] = inner
+                cleaned.append(entry)
+        if cleaned:
+            hooks[event] = cleaned
+        else:
+            del hooks[event]
+with open(sf, "w") as f:
+    json.dump(settings, f, indent=2)
+' 2>/dev/null || true
+fi
+
+if [ -f "$SETTINGS_FILE" ]; then
+    # Backup existing settings
+    mkdir -p "${BACKUP_DIR}"
+    cp "$SETTINGS_FILE" "${BACKUP_DIR}/settings.json"
+    echo -e "  ${YELLOW}↻${NC} Backed up existing settings.json"
+fi
+
+# Add fresh hooks (atomic write via temp file + rename)
+SAVE_HOOK_PATH="$SAVE_HOOK" PRECOMPACT_HOOK_PATH="$PRECOMPACT_HOOK" \
+SETTINGS_PATH="$SETTINGS_FILE" \
+python3 -c '
+import json, os, tempfile
+
+sf = os.environ["SETTINGS_PATH"]
+save_hook = os.environ["SAVE_HOOK_PATH"]
+precompact_hook = os.environ["PRECOMPACT_HOOK_PATH"]
+
+settings = {}
+if os.path.exists(sf):
+    with open(sf) as f:
+        settings = json.load(f)
+
+hooks = settings.setdefault("hooks", {})
+stop_hooks = hooks.setdefault("Stop", [])
+stop_hooks.append({"matcher": "", "hooks": [{"type": "command", "command": save_hook}]})
+precompact_hooks = hooks.setdefault("PreCompact", [])
+precompact_hooks.append({"matcher": "", "hooks": [{"type": "command", "command": precompact_hook}]})
+
+# Atomic write: temp file + rename
+tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(sf) or ".")
+with os.fdopen(tmp_fd, "w") as f:
+    json.dump(settings, f, indent=2)
+os.replace(tmp_path, sf)
+' 2>/dev/null && echo -e "  ${GREEN}+${NC} Configured Stop + PreCompact hooks in settings.json" \
+              || echo -e "  ${YELLOW}!${NC} Could not configure hooks (Python 3 required). Add manually."
 
 # Clean up empty backup dir
 [ -d "$BACKUP_DIR" ] || true
@@ -85,6 +170,9 @@ echo "    > /evolve <task>         # run a self-evolving cycle"
 echo "    > /evaluate [target]     # evaluate code quality"
 echo "    > /org-sync              # check org status"
 echo ""
+echo "  Auto-save hooks: active (every 15 messages + before compaction)"
+echo ""
 echo "  Config: ~/.claude/agent-config.yaml"
 echo "  Org:    ~/.claude/org/"
+echo "  Hooks:  ~/.claude/hooks/"
 echo "============================================"

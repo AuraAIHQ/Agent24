@@ -13,6 +13,12 @@ These are git submodules of top open-source projects we study and borrow ideas f
 | **GPTSwarm** | 1.0k | 图结构 agent swarm，RL 优化 agent 连接权重 |
 | **metabot** | 539 | Claude Code SDK 原生、MetaMemory 知识积累、IM 控制 |
 
+## AI Memory Systems
+
+| Project | Stars | What We Learn |
+|---------|-------|---------------|
+| **MemPalace** (Milla Jovovich) | 新 | 分层记忆(L0-L3)、Palace 结构化检索(+34%)、时序KG、Auto-Save Hooks |
+
 ## Agent Harness & Skills
 
 | Project | Stars | What We Learn |
