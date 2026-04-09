@@ -73,9 +73,9 @@ For each component in `components.yaml` that has a `local_path`:
 3. Verify it's a git repo: use Bash with path stored in a shell variable:
    ```bash
    path='/absolute/path/here'
-   test -d "$path/.git" && git -C "$path" log --oneline -3
+   test -e "$path/.git" && git -C "$path" log --oneline -3
    ```
-4. If not a git repo, skip it and note in status.md
+4. If `.git` doesn't exist (not a file or directory), skip it and note in status.md
 5. Write findings to `~/.claude/org/status.md`
 
 **Security:** NEVER interpolate paths directly into command strings. Always assign to a shell variable first and reference with `"$var"`. This prevents command injection even with adversarial paths.
@@ -138,7 +138,7 @@ shared:
 - **Don't use `~` in local_path.** Use absolute paths (`/Users/...` or `/home/...`). Tilde expansion is unreliable in many contexts.
 - **Reject dangerous path characters.** Paths containing `$`, backticks, `"`, `'`, or `\` must be rejected at write-time. These enable command injection.
 - **Never interpolate paths into command strings.** Always use shell variables: `path='/foo'; git -C "$path" log`. Never `git -C "/foo" log` where `/foo` came from YAML.
-- **Check for .git before running git commands.** A valid directory isn't necessarily a git repo. `test -d "$path/.git"` first.
+- **Check for .git before running git commands.** A valid directory isn't necessarily a git repo. Use `test -e "$path/.git"` (not `-d`, because worktrees/submodules use a `.git` file).
 - **Don't parse YAML with shell tools.** Use the Read tool to read `components.yaml`, then parse the content. Never `cat | grep` YAML.
 - **Keep blueprint under 2000 tokens.** It's loaded by /evolve on every cycle. If it's too long, it wastes context budget.
 - **status.md is ephemeral.** It can be deleted and regenerated anytime. Don't put important decisions there.

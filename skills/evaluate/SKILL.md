@@ -15,7 +15,7 @@ Determine the target (in priority order):
   - If >= 2: use `git diff HEAD~1`
   - If == 1: use `git show HEAD` (only commit, can't diff against parent)
   - If 0 or not a git repo: evaluate the working directory
-- If a PR number is given → check `which gh` first; if available, `gh pr diff {n}`; if not, say so and skip
+- If a PR number is given → validate it is digits only (reject anything with non-digit chars); check `which gh`; if available, run `gh pr diff -- "$n"` (the `--` prevents option injection); if gh unavailable, say so and skip
 - If "project" is given → evaluate overall project health (read key files)
 - If nothing is given → first check `git rev-parse --is-inside-work-tree` to detect if in a git repo:
   - **Not a git repo:** evaluate the working directory (read key files)
