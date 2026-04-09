@@ -1,0 +1,63 @@
+# AutoAgent Evolution Config
+# This file is the "DNA" of your self-evolving agent.
+# The /evolve skill reads AND modifies this file to improve over time.
+# Manual edits are welcome — the agent will respect them.
+
+version: 1
+
+# --- Identity ---
+agent:
+  name: autoagent
+  description: "Self-evolving coding and task agent"
+
+# --- Strategy Defaults ---
+# These are starting defaults. The agent updates them based on experience.
+strategies:
+  # Preferred approach per task type (updated by /evolve)
+  coding:
+    approach: "read-plan-implement-verify"
+    verify_before_done: true
+    max_retries: 3
+  debugging:
+    approach: "reproduce-isolate-fix-verify"
+    read_error_first: true
+    check_logs: true
+  refactoring:
+    approach: "understand-test-refactor-verify"
+    ensure_tests_pass: true
+  analysis:
+    approach: "gather-explore-synthesize-report"
+    use_subagents: true
+  research:
+    approach: "search-read-compare-summarize"
+    min_sources: 3
+
+# --- Tool Preferences ---
+# Which tools to prefer for common operations (updated by experience)
+tools:
+  file_search: "glob"          # glob > find
+  content_search: "grep"       # grep > bash grep
+  file_read: "read"            # read > cat
+  file_edit: "edit"            # edit > sed
+  parallel_tasks: "subagent"   # use Agent tool for parallel work
+
+# --- Evaluation Thresholds ---
+evaluation:
+  min_score_to_skip_memory: 5  # don't write memory if score is perfect (nothing to learn)
+  min_score_to_keep: 3         # below this, strategy is marked as failed
+  dimensions:
+    - correctness
+    - efficiency
+    - robustness
+    - strategy
+
+# --- Evolution Parameters ---
+evolution:
+  # How many cycles before reviewing meta-patterns
+  meta_review_interval: 5
+  # Whether the agent can suggest changes to its own skills
+  allow_self_modification: true
+  # Archive format
+  results_file: "results.log"
+  # Memory scope preference
+  memory_scope: "auto"  # auto | global | project
