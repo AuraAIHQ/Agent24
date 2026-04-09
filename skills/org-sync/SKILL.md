@@ -86,6 +86,57 @@ For each component in `components.yaml` that has a `local_path`:
 2. If `local_path` exists, read its CLAUDE.md, README.md, and check recent git activity
 3. Report health: recent commits, test status, open issues
 
+### `/org-sync repo {url}` — Connect Org Context to a Shared Git Repo
+
+**Problem:** `~/.claude/org/` is local-only. Team members need to share blueprint and components.
+
+**Solution:** Use a shared git repo as the source of truth for org context.
+
+1. If `~/.claude/org/` already has files, check if it's already a git repo (`test -e ~/.claude/org/.git`)
+2. If not a git repo:
+   - Back up existing files: `cp -r ~/.claude/org/ ~/.claude/org.bak.$(date +%s)`
+   - Clone the repo: `git clone {url} ~/.claude/org/`
+   - Merge any backup files that don't conflict
+3. If already a git repo, just update the remote: `git -C ~/.claude/org remote set-url origin {url}`
+4. Report: "Org context now synced to {url}"
+
+### `/org-sync pull` — Pull Latest Org Context from Shared Repo
+
+1. Check `~/.claude/org/` is a git repo (`test -e ~/.claude/org/.git`)
+2. If not: report "Org context is not connected to a repo. Run `/org-sync repo {url}` first."
+3. If yes: `git -C ~/.claude/org pull --rebase`
+4. Report changes: what files were updated
+
+### `/org-sync push` — Push Local Changes to Shared Repo
+
+1. Check `~/.claude/org/` is a git repo
+2. Check for uncommitted changes: `git -C ~/.claude/org status --porcelain`
+3. If changes exist:
+   - Stage: `git -C ~/.claude/org add -A`
+   - Commit: `git -C ~/.claude/org commit -m "org-sync: update from $(hostname)"`
+   - Push: `git -C ~/.claude/org push`
+4. Report what was pushed
+
+**Security:** The repo URL is validated the same way as `local_path` — reject URLs containing `$`, backticks, `"`, `'`, `\`, or newlines. Only HTTPS and SSH (`git@`) URLs are accepted.
+
+### Team Workflow
+
+```
+Founder:
+  /org-sync init          → create blueprint + components.yaml
+  /org-sync repo {url}    → push to shared repo
+
+New member:
+  /org-sync repo {url}    → clone shared org context
+  /init                   → personal setup (identity, preferences)
+  /org-sync add           → register their component
+
+Any member:
+  /org-sync pull          → get latest from team
+  /org-sync update        → refresh status
+  /org-sync push          → share changes back
+```
+
 ## Blueprint Format
 
 **Hard limit: < 2000 tokens.** This is loaded into context by /evolve on every cycle (Phase 0). Brevity is critical — every extra token here competes with task context.
