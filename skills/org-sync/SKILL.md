@@ -99,7 +99,7 @@ For each component in `components.yaml` that has a `local_path`:
    - Back up: `mv ~/.claude/org/ "$backup_dir"`
    - Clone: assign URL to variable first: `url='...'; git clone "$url" ~/.claude/org/`
    - If clone fails: `rm -rf ~/.claude/org/ ; mv "$backup_dir" ~/.claude/org/` and report error
-   - If clone succeeds: `cp -rn "$backup_dir"/* ~/.claude/org/ 2>/dev/null && rm -rf "$backup_dir"` (only delete backup if copy succeeds)
+   - If clone succeeds: `cp -rn "$backup_dir"/. ~/.claude/org/ 2>/dev/null && rm -rf "$backup_dir"` (copies dotfiles too; only deletes backup if copy succeeds)
 4. If `~/.claude/org/` doesn't exist: `url='validated-url'; git clone "$url" ~/.claude/org/`
 5. Report: "Org context now synced to {url}"
 

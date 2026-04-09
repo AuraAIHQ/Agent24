@@ -35,6 +35,7 @@ if command -v python3 &>/dev/null; then
 fi
 
 PRECOMPACT_FLAG="${STATE_DIR}/precompact_blocked_${SID_HASH}"
+PRECOMPACT_LOCK="${STATE_DIR}/precompact_${SID_HASH}.lock"
 
 # Re-entry guard: if AI already saved, allow compaction
 if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
@@ -43,15 +44,25 @@ if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
     exit 0
 fi
 
-# If we already blocked for THIS session, allow
-if [ -f "$PRECOMPACT_FLAG" ]; then
-    rm -f "$PRECOMPACT_FLAG" 2>/dev/null || true
+# Locked flag check to prevent race between concurrent PreCompact invocations
+DECISION="block"
+(
+    flock -x 9 2>/dev/null || true
+    if [ -f "$PRECOMPACT_FLAG" ]; then
+        rm -f "$PRECOMPACT_FLAG" 2>/dev/null || true
+        echo "allow"
+    else
+        touch "$PRECOMPACT_FLAG" 2>/dev/null || true
+        echo "block"
+    fi
+) 9>"$PRECOMPACT_LOCK" > "${STATE_DIR}/.precompact_result_$$" 2>/dev/null
+DECISION=$(cat "${STATE_DIR}/.precompact_result_$$" 2>/dev/null || echo "block")
+rm -f "${STATE_DIR}/.precompact_result_$$" 2>/dev/null || true
+
+if [ "$DECISION" = "allow" ]; then
     echo '{"decision": "allow"}'
     exit 0
 fi
-
-# Mark that we blocked this session
-touch "$PRECOMPACT_FLAG" 2>/dev/null || true
 
 # Block once — force save before compaction
 cat <<'HOOKEOF'
