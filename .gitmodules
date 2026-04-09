@@ -1,0 +1,21 @@
+[submodule "vendor/dgm"]
+	path = vendor/dgm
+	url = https://github.com/jennyzzt/dgm.git
+[submodule "vendor/HyperAgents"]
+	path = vendor/HyperAgents
+	url = https://github.com/facebookresearch/HyperAgents.git
+[submodule "vendor/GPTSwarm"]
+	path = vendor/GPTSwarm
+	url = https://github.com/metauto-ai/GPTSwarm.git
+[submodule "vendor/metabot"]
+	path = vendor/metabot
+	url = https://github.com/xvirobotics/metabot.git
+[submodule "vendor/Agent-Skills-Context-Engineering"]
+	path = vendor/Agent-Skills-Context-Engineering
+	url = https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering.git
+[submodule "vendor/water"]
+	path = vendor/water
+	url = https://github.com/manthanguptaa/water.git
+[submodule "vendor/agentic-harness-patterns"]
+	path = vendor/agentic-harness-patterns
+	url = https://github.com/keli-wen/agentic-harness-patterns-skill.git
