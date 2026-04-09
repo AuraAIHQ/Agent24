@@ -59,16 +59,26 @@ If org context doesn't exist, suggest running `/org-sync init`.
 3. Read existing `components.yaml`, append the new component
 4. Update `blueprint.md` component list if needed
 
-**Path validation:** If `local_path` is provided, verify it exists using `test -d` before adding. Store paths as-is (the user is responsible for correct paths). Never interpolate paths into unquoted shell commands.
+**Path validation:** If `local_path` is provided:
+- It MUST be an absolute path starting with `/`
+- Reject paths containing `$`, backticks, `"`, `\`, or newlines (these enable injection)
+- Verify it exists using the Read tool or `test -d` with the path passed as a variable, not interpolated
+- If validation fails, report the issue and do not add the component
 
 ### `/org-sync update` — Refresh Status
 
 For each component in `components.yaml` that has a `local_path`:
-1. Verify the path exists: `test -d "{path}"` (always double-quote paths)
-2. If exists: `git -C "{path}" log --oneline -3` (always double-quote)
-3. Write findings to `~/.claude/org/status.md`
+1. Read the path from YAML using the Read tool (never parse YAML with shell)
+2. Validate: must start with `/`, must not contain `$`, backticks, `"`, or `\`
+3. Verify it's a git repo: use Bash with path stored in a shell variable:
+   ```bash
+   path='/absolute/path/here'
+   test -d "$path/.git" && git -C "$path" log --oneline -3
+   ```
+4. If not a git repo, skip it and note in status.md
+5. Write findings to `~/.claude/org/status.md`
 
-**Security:** Always double-quote all paths in shell commands. Never construct commands by string concatenation with unvalidated input. Use the Read tool to read YAML instead of parsing with shell commands.
+**Security:** NEVER interpolate paths directly into command strings. Always assign to a shell variable first and reference with `"$var"`. This prevents command injection even with adversarial paths.
 
 ### `/org-sync check {component}` — Deep Check One Component
 
@@ -126,7 +136,9 @@ shared:
 
 - **Don't inject org context into CLAUDE.md.** Org data is local/global only. Committing it leaks paths and creates merge conflicts across team members.
 - **Don't use `~` in local_path.** Use absolute paths (`/Users/...` or `/home/...`). Tilde expansion is unreliable in many contexts.
-- **Always quote paths in shell commands.** `git -C "/path/with spaces"` not `git -C /path/with spaces`. This prevents both breakage and injection.
+- **Reject dangerous path characters.** Paths containing `$`, backticks, `"`, or `\` must be rejected at write-time. These enable command injection.
+- **Never interpolate paths into command strings.** Always use shell variables: `path='/foo'; git -C "$path" log`. Never `git -C "/foo" log` where `/foo` came from YAML.
+- **Check for .git before running git commands.** A valid directory isn't necessarily a git repo. `test -d "$path/.git"` first.
 - **Don't parse YAML with shell tools.** Use the Read tool to read `components.yaml`, then parse the content. Never `cat | grep` YAML.
 - **Keep blueprint under 2000 tokens.** It's loaded by /evolve on every cycle. If it's too long, it wastes context budget.
 - **status.md is ephemeral.** It can be deleted and regenerated anytime. Don't put important decisions there.

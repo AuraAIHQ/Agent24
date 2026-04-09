@@ -10,11 +10,19 @@ Target: $ARGUMENTS
 ## Step 1: Identify What to Evaluate
 
 Determine the target (in priority order):
-- If a file path is given → evaluate that file's quality
-- If "last commit" is given → run `git diff HEAD~1` (check `git rev-list --count HEAD` first; if < 2, use `git diff --cached` or `git diff` instead)
-- If a PR number is given → run `gh pr diff {number}` (if gh is unavailable, say so and skip)
+- If a file path is given → verify it exists with `ls`, then evaluate the file
+- If "last commit" is given → check `git rev-list --count HEAD`:
+  - If >= 2: use `git diff HEAD~1`
+  - If == 1: use `git show HEAD` (only commit, can't diff against parent)
+  - If 0 or not a git repo: evaluate the working directory
+- If a PR number is given → check `which gh` first; if available, `gh pr diff {n}`; if not, say so and skip
 - If "project" is given → evaluate overall project health (read key files)
-- If nothing is given → evaluate uncommitted changes via `git diff`; if clean, evaluate `git diff HEAD~1`; if < 2 commits, evaluate the working directory
+- If nothing is given → use this fallback chain:
+  1. `git diff --cached` — if non-empty, evaluate staged changes
+  2. `git diff` — if non-empty, evaluate unstaged changes
+  3. `git rev-list --count HEAD` >= 2 → `git diff HEAD~1` (last commit)
+  4. `git rev-list --count HEAD` == 1 → `git show HEAD`
+  5. Not a git repo → evaluate the working directory
 
 **Always verify the target exists before proceeding.** If it doesn't, report that clearly and stop.
 

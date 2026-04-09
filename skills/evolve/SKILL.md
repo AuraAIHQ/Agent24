@@ -89,13 +89,17 @@ type: feedback
 
 ### 4b. Update Agent Config
 
-If you identified a concrete default improvement, update `agent-config.yaml` (in cwd or `~/.claude/`):
-- Strategy `success_rate` and `uses` counters for the approach used
-- Tool preferences if a tool proved better than the current default
+Read `agent-config.yaml` (in cwd, or `~/.claude/agent-config.yaml`) and update the strategy used:
+- Increment `uses` by 1
+- Update `success_rate` with running average: `new = (old * (uses-1) + (score >= eval.correctness_gate ? 1 : 0)) / uses`
+- Read `evaluation.correctness_gate` from config (default: 3) for the gating threshold
+- Do NOT add fields that don't exist in the config schema
 
 ### 4c. Archive to Results Log
 
-Append to `.claude/results.log` (create if missing):
+Read `evolution.results_file` from `agent-config.yaml` (default: `.claude/results.log`).
+Create parent directory first (use Bash: `mkdir -p "$(dirname "$results_file")"`).
+Append one line:
 ```
 {ISO-date}\t{task-type}\t{score}\t{strategy}\t{one-line-insight}
 ```

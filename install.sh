@@ -28,17 +28,17 @@ for skill_dir in "${SCRIPT_DIR}/skills"/*/; do
     skill_name=$(basename "$skill_dir")
     target="${SKILLS_DIR}/${skill_name}"
 
-    if [ -d "$target" ] && [ -f "$target/SKILL.md" ]; then
-        # Backup existing before overwrite
-        mkdir -p "${BACKUP_DIR}/skills/${skill_name}"
-        cp "$target/SKILL.md" "${BACKUP_DIR}/skills/${skill_name}/SKILL.md"
+    if [ -d "$target" ]; then
+        # Backup entire existing skill directory before overwrite
+        mkdir -p "${BACKUP_DIR}/skills/"
+        cp -r "$target" "${BACKUP_DIR}/skills/${skill_name}"
         echo -e "  ${YELLOW}↻${NC} Updating: ${skill_name} (backup in backups/)"
     else
         echo -e "  ${GREEN}+${NC} Installing: ${skill_name}"
         mkdir -p "$target"
     fi
-    # Copy all files in skill directory, not just SKILL.md
-    cp -r "${skill_dir}"* "$target/"
+    # Copy all files including dotfiles
+    cp -r "${skill_dir}". "$target/" 2>/dev/null || cp -r "${skill_dir}"* "$target/"
 done
 
 # --- Install Agent Config (template only, don't overwrite) ---
