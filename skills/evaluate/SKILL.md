@@ -123,6 +123,12 @@ Storage contract (same as `/evolve`):
 - **Don't write memory for routine evaluations.** Only write if you discovered something genuinely reusable.
 - **Always verify target exists.** `git log`, `ls`, or `gh` before analyzing. Don't evaluate phantom diffs.
 
+### Context Engineering
+
+- **Key findings go at top and bottom of output.** The score table and top action items should bookend the report. Don't bury critical issues in the middle of a long list.
+- **Read selectively.** For large diffs, focus on changed files — don't read the entire codebase for context. Use Grep to find callers of changed functions.
+- **Compress evidence.** Cite `file:line` with a one-line description. Don't paste 20 lines of code as "evidence" — the user can read the file.
+
 ## Integration
 
 - Called by `/evolve` in Phase 3 for deeper second-opinion evaluation

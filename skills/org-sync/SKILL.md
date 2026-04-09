@@ -88,26 +88,40 @@ For each component in `components.yaml` that has a `local_path`:
 
 ## Blueprint Format
 
-Keep under 2000 tokens. This is loaded into context by other skills.
+**Hard limit: < 2000 tokens.** This is loaded into context by /evolve on every cycle (Phase 0). Brevity is critical — every extra token here competes with task context.
+
+**Context Engineering rules for blueprint:**
+- Vision: 1-2 sentences max
+- Architecture: ASCII diagram preferred over prose (higher info density)
+- Components: one line each — `name: role` format. Role = what it does in the system (e.g. "API gateway"). Description = how it works (lives in components.yaml, NOT here)
+- Put the most frequently referenced info at the TOP (high recall position)
 
 ```markdown
 # {Org Name}
 
 ## Vision
-{One paragraph — what the org is building}
+{1-2 sentences — what the org is building and why}
 
 ## Architecture
-{How pieces fit together — data flow, dependency layers}
-{Use a simple ASCII diagram if helpful}
+{ASCII diagram showing data flow / dependency layers}
+{Example:}
+{  frontend → api-gateway → [auth, data-service] → database }
 
 ## Components
-{Brief role of each — one line per component, NOT duplicating components.yaml}
+- **{current-project}**: {role in 5-10 words}  ← always list current project first
+- {name}: {role in 5-10 words}
 
 ## Shared Resources
 - Contracts: {repo url}
 - SDK: {repo url}
 - Docs: {url}
 ```
+
+**Anti-patterns to avoid:**
+- Don't put component descriptions here (use components.yaml)
+- Don't put status here (use status.md)
+- Don't put dependency details here (use components.yaml upstream/downstream)
+- Don't use paragraphs where a bullet point suffices
 
 ## Components Registry Format
 
@@ -143,6 +157,13 @@ shared:
 - **Keep blueprint under 2000 tokens.** It's loaded by /evolve on every cycle. If it's too long, it wastes context budget.
 - **status.md is ephemeral.** It can be deleted and regenerated anytime. Don't put important decisions there.
 - **Dependencies are component names, not paths.** Always reference by the key in `components:`, never by path or URL.
+
+### Context Engineering
+
+- **Blueprint is high-frequency context.** It's loaded in every /evolve cycle (Phase 0). Keep it under 2000 tokens. Architecture diagram + one-line-per-component is the target density.
+- **Put current project info at the top of blueprint output.** When /org-sync shows context, the current component's info should appear first (high recall position), not alphabetically sorted.
+- **components.yaml is low-frequency detail.** It stores full metadata but is only read on-demand. Don't duplicate its content in blueprint.md.
+- **Compress status.** `status.md` should be one line per component: name + status + last commit date. Not full git logs.
 
 ## Integration
 
