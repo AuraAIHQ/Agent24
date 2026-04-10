@@ -21,6 +21,12 @@ These are git submodules of top open-source projects we study and borrow ideas f
 | **water** | 274 | 生产级 agent harness 框架设计 |
 | **agentic-harness-patterns** | 182 | Harness 工程模式：memory、permissions、context |
 
+## Agent Communication
+
+| Project | Stars | What We Learn |
+|---------|-------|---------------|
+| **agent-speaker** (jhfnetboy) | 新 | Nostr 去中心化 agent 通信、Go CLI、zstd 压缩、relay 管理 |
+
 ## Keeping Up to Date
 
 ```bash
