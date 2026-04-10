@@ -91,11 +91,46 @@ Score all dimensions (reached when correctness >= correctness_gate, or when `sta
 
 Compare with memory: Did a known strategy help or fail? Is this a new pattern? Quality trending up or down?
 
+### Stage 4: External Evaluation (optional, config-driven)
+
+Read `evaluation.evaluator` from `agent-config.yaml` (default: `"self"`).
+
+**If evaluator is `"self"`**: skip this stage. Self-evaluation scores from Stage 1-2 are final.
+
+**If evaluator is `"codex"`**:
+1. Generate a diff of all changes made in Phase 2 (use `git diff` or collect file changes)
+2. Read `evaluation.codex.tone` and `evaluation.codex.focus` from config
+3. Call the Codex MCP tool (`mcp__codex__codex`) with a review prompt:
+   - Include the diff and a request for strict code review
+   - Ask Codex to score the same dimensions: correctness, efficiency, robustness, strategy
+   - Ask Codex to return scores as structured data (1-5 per dimension)
+4. Parse Codex response into scores. If Codex doesn't return structured scores, infer from its assessment
+5. Record self-eval scores as `self_score`, Codex scores as `external_score`
+6. **Final scores = external scores** (Codex takes priority)
+
+**If evaluator is `"agent-speaker"`**:
+1. Read `evaluation.agent_speaker.evaluator_pubkey` and `evaluation.agent_speaker.relay` from config
+2. If `evaluator_pubkey` is empty, skip with warning "No evaluator agent configured"
+3. Generate a diff of all changes made in Phase 2
+4. Call `agent_send_message` MCP tool: send the diff + evaluation request to the evaluator agent
+5. Call `agent_query_messages` MCP tool: poll for response (filter by evaluator's pubkey, limit 1)
+6. Wait up to `evaluation.agent_speaker.timeout` seconds, polling every 5 seconds
+7. If response received: parse scores, record as `external_score`. **Final scores = external scores**
+8. If timeout: log warning "External evaluator did not respond within {timeout}s", fall back to self-eval scores
+
+**If evaluator is `"dual"`**:
+1. Run both Codex and agent-speaker evaluations (if configured)
+2. Record all three score sets: `self_score`, `codex_score`, `agent_score`
+3. **Final scores = average of all available external scores** (self-eval excluded from final but recorded)
+4. If no external evaluator responds, fall back to self-eval
+
+**Score reconciliation rule**: When external evaluation is active, the Phase 5 report shows both self and external scores side by side. This makes "self-eval bias" visible over time.
+
 ### Determine Result Label (after evaluation completes)
 
 Note: If Stage 1 early-exit already set `result` = `"failed"`, skip this step.
 
-Based on the scores, assign a `result` label for use in Phase 4:
+Based on the **final** scores (external if available, else self), assign a `result` label for use in Phase 4:
 - **`success`**: correctness >= correctness_gate AND overall score >= correctness_gate
 - **`partial`**: correctness >= correctness_gate BUT overall score < correctness_gate
 - **`failed`**: correctness < correctness_gate
@@ -170,9 +205,12 @@ date: "{ISO-datetime-UTC}"            # full ISO-8601 with time in UTC, e.g. "20
 task_type: "{coding|debugging|refactoring|analysis|research|automation}"
 task: "{one-line task description}"
 strategy: "{approach used}"
-score: {overall-score}
+score: {overall-score}                # final score (external if available, else self)
 correctness: {correctness-score}
 result: "{success|partial|failed}"
+evaluator: "{self|codex|agent-speaker|dual}"  # which evaluator produced final score
+self_score: {self-eval-overall}               # always recorded for bias tracking
+external_score: {external-overall or null}    # null if evaluator is "self"
 parent: "{id of previous cycle on same task type, or null}"
 insight: "{one-line key takeaway}"
 ```
@@ -216,9 +254,23 @@ This file is loaded in every Phase 0 (L1). It gives the agent a quick snapshot o
 **Task:** {description}
 **Result:** {success / partial / failed}
 **Score:** {n}/5 (correctness: {n}, efficiency: {n}, robustness: {n}, strategy: {n})
+**Evaluator:** {self / codex / agent-speaker / dual}
+**Self Score:** {n}/5  |  **External Score:** {n}/5 or N/A
 **Strategy:** {approach used}
 **Learned:** {key takeaway}
 **Improved:** {what was updated — memory / config / nothing}
+```
+
+When external evaluation is active, show score comparison to make bias visible:
+```
+**Score Comparison:**
+| Dimension    | Self | External | Delta |
+|-------------|------|----------|-------|
+| Correctness | {n}  | {n}      | {±n}  |
+| Efficiency  | {n}  | {n}      | {±n}  |
+| Robustness  | {n}  | {n}      | {±n}  |
+| Strategy    | {n}  | {n}      | {±n}  |
+| **Overall** | {n}  | {n}      | {±n}  |
 ```
 
 ## Gotchas (common failure modes)

@@ -42,6 +42,30 @@ evaluation:
   min_score_to_keep: 3         # below this, record failure memory (what went wrong)
   staged: true                 # enable staged evaluation (Stage 1 → 2 → 3)
 
+  # --- External Evaluator ---
+  # Default: "self" (Phase 3 internal evaluation).
+  # When set, external evaluator runs AFTER self-evaluation.
+  # External score takes priority; self-eval is recorded as "self_score" for comparison.
+  #
+  # Options:
+  #   evaluator: "self"                   # default, no external
+  #   evaluator: "codex"                  # use Codex MCP for review
+  #   evaluator: "agent-speaker"          # use remote agent via Nostr
+  #   evaluator: "dual"                   # both self + external, compare scores
+  #
+  evaluator: "self"
+
+  # Codex evaluator config (used when evaluator is "codex" or "dual")
+  codex:
+    tone: "strict"                        # strict | balanced | lenient
+    focus: "correctness,security,performance"  # dimensions to emphasize
+
+  # Agent-Speaker evaluator config (used when evaluator is "agent-speaker" or "dual")
+  agent_speaker:
+    evaluator_pubkey: ""                  # pubkey of the evaluating agent (required)
+    relay: ""                             # relay URL (default: agent-speaker defaults)
+    timeout: 60                           # seconds to wait for response
+
 # --- Evolution Parameters ---
 evolution:
   meta_review_interval: 5      # cycles before checking for cross-cycle patterns
