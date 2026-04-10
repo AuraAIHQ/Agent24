@@ -22,3 +22,6 @@
 [submodule "vendor/SWE-agent"]
 	path = vendor/SWE-agent
 	url = https://github.com/SWE-agent/SWE-agent.git
+[submodule "vendor/agent-speaker"]
+	path = vendor/agent-speaker
+	url = https://github.com/AuraAIHQ/agent-speaker
