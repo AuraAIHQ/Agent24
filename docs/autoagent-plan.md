@@ -187,6 +187,21 @@ Agent A (dev)              Relay              Agent B (marketing)
 | MemPalace | 分层记忆、temporal validity、auto-save hooks | L0-L3 + front-matter + hooks |
 | SWE-agent | YAML 配置驱动 | agent-config.yaml |
 
+### 思路来源：AutoAgent
+
+Agent24 的核心理念——"meta-agent 持续迭代 agent harness"——来自 [kevinrgu/autoagent](https://github.com/kevinrgu/autoagent)。
+
+AutoAgent 的模式：meta-agent (Claude Code) 运行 benchmark → 诊断失败 → 编辑 `agent.py` → 重跑 → 爬坡 pass rate。这个"执行-评估-改进"循环是 Agent24 `/evolve` 的直接灵感来源。
+
+**关键差异：**
+
+| | AutoAgent | Agent24 |
+|---|-----------|---------|
+| 进化对象 | `agent.py` 源代码 | `agent-config.yaml` + memory |
+| 执行环境 | Docker + Harbor benchmark | Claude Code 任意项目 |
+| 评估方式 | ATIF 轨迹 + 外部验证器 | 自评估 (Phase 3) + 可选外部 |
+| 需要 API Key | 是 | 否（订阅即可）|
+
 ### 从 AutoAgent 到 Agent24
 
 | 阶段 | 形态 | 进化对象 | 验证方式 |
