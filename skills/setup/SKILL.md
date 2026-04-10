@@ -33,16 +33,28 @@ Ask these questions (adapt phrasing naturally, don't read them like a form):
 4. **偏好的工作方式？** — 喜欢详细解释还是简洁回答？喜欢先讨论方案还是直接动手？
 
 Save answers to user memory files in `~/.claude/memory/` (create with `mkdir -p` first):
+- `identity.md` — **Layer 0**: one-paragraph summary of who the user is (loaded every /evolve cycle). Keep under 100 tokens. No front-matter needed — this is a plain text file, not a memory entry.
 - `user-role.md` — role, experience level (type: user)
 - `user-tech-stack.md` — languages, frameworks, tools (type: user)
 - `user-preferences.md` — communication and work style preferences (type: feedback)
 
-Each file MUST have front-matter matching the memory system contract:
+**identity.md format** (plain text, ~50-100 tokens):
+```
+{Name} is a {role} at {org}. Tech stack: {languages/frameworks}.
+Experience: {senior/mid/junior} in {domains}. Prefers {work style}.
+Currently focused on: {current projects/goals}.
+```
+
+All other files MUST have front-matter matching the memory system contract:
 ```markdown
 ---
 name: user-role
 description: {one-line description}
 type: user
+created: "{ISO-date}"
+valid_from: "{ISO-date}"
+valid_to: null
+importance: {1-5}
 ---
 {content}
 ```
@@ -57,10 +69,12 @@ After writing each file, append an index line to `~/.claude/memory/MEMORY.md`:
 Ask:
 
 1. **你是个人项目还是团队/组织？** — If solo, skip to Step 3
-2. **组织名称和一句话愿景？** — 例如 "PolyLens — 去中心化数据分析平台"
-3. **整体架构是怎样的？** — 有哪些主要组件/服务？它们怎么交互？
-4. **有共享资源吗？** — 公共 SDK、合约仓库、文档站点等
-5. **团队协作流程？** — PR review 流程、分支策略、发布周期等
+2. **团队是否已有共享的 org context 仓库？** — If yes, ask for the repo URL and run `/org-sync repo {url}` to clone it, then skip to Step 3 (blueprint already exists). If no, continue:
+3. **组织名称和一句话愿景？** — 例如 "PolyLens — 去中心化数据分析平台"
+4. **整体架构是怎样的？** — 有哪些主要组件/服务？它们怎么交互？
+5. **有共享资源吗？** — 公共 SDK、合约仓库、文档站点等
+6. **团队协作流程？** — PR review 流程、分支策略、发布周期等
+7. **要创建共享仓库吗？** — If yes, suggest creating a repo (e.g. `org-context`) and run `/org-sync repo {url}` + `/org-sync push` after setup
 
 With answers, create:
 - `~/.claude/org/blueprint.md` — org vision + architecture (keep under 2000 tokens)
