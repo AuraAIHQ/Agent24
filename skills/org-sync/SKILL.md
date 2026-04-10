@@ -139,7 +139,7 @@ Founder:
 
 New member:
   /org-sync repo {url}    → clone shared org context
-  /init                   → personal setup (identity, preferences)
+  /setup                  → personal setup (identity, preferences)
   /org-sync add           → register their component
 
 Any member:

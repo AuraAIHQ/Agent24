@@ -69,7 +69,7 @@ triples (subject, predicate, object, valid_from, valid_to, confidence)
 
 ```
 ~/.claude/memory/
-  identity.md          ← L0: 用户是谁（/init 生成）
+  identity.md          ← L0: 用户是谁（/setup 生成）
   essential.md         ← L1: 自动生成的关键事实摘要（定期更新）
   MEMORY.md            ← 索引（现有）
   *.md                 ← L2/L3: 详细记忆文件（现有）

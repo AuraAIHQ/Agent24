@@ -12,7 +12,7 @@ Topic/Task: $ARGUMENTS
 Load context in layers — cheap layers always, expensive layers on-demand:
 
 ### Layer 0 — Identity + Config (always load, < 200 tokens)
-1. `~/.claude/memory/identity.md` — who is the user (created by /init)
+1. `~/.claude/memory/identity.md` — who is the user (created by /setup)
 2. `agent-config.yaml` in cwd, or `~/.claude/agent-config.yaml` — strategy config
 
 ### Layer 1 — Essential Story (always load, < 500 tokens)
