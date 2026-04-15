@@ -1,5 +1,6 @@
 # Agent24
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 > Self-evolving agent framework for Claude Code. No API key needed — runs entirely on your Claude Code subscription.
 
 Agent24 gives Claude Code **persistent memory, self-evaluation, and cross-project organization awareness**. It learns from every task cycle, improves its strategies over time, and keeps all your projects aligned under one shared blueprint.
@@ -115,4 +116,4 @@ See [docs/usage-scope.md](docs/usage-scope.md) for details.
 
 ## License
 
-MIT
+Licensed under the [Apache License, Version 2.0](https://opensource.org/licenses/Apache-2.0). See [LICENSE](./LICENSE) for details.
