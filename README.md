@@ -54,14 +54,17 @@
 
 ### 核心组件
 
-| 组件 | 路径 | 职责 |
-|------|------|------|
-| **BackendManager** | `src/main/backend-manager.ts` | fork/health-check/auto-restart backend daemon |
-| **Backend Daemon** | `src/backend/server.ts` | Node.js http 服务，聚合路由，不依赖 Electron |
-| **LLM Gateway** | `src/backend/llm-gateway.ts` | 统一 LLM 调用、token 统计、运行时切换 |
-| **CapabilityModule** | `src/backend/capabilities/` | 可插拔能力模块接口 `register(router, ctx)` |
-| **IPC 桥** | `src/main/ipc/index.ts` | `BackendProxy` IPC 转发 + 参数校验 |
-| **Preload** | `src/main/preload.ts` | `backendProxy()` 暴露给 Renderer |
+| 组件 | 路径 | 状态 | 职责 |
+|------|------|------|------|
+| **BackendManager** | `src/main/backend-manager.ts` | ✅ M2 | fork/health-check/auto-restart backend daemon |
+| **Backend Daemon** | `src/backend/server.ts` | ✅ M2 | Node.js http 服务，聚合路由，不依赖 Electron |
+| **LLM Gateway** | `src/backend/llm-gateway.ts` | ✅ M2 | 统一 LLM 调用、token 统计、运行时切换 |
+| **CapabilityModule** | `src/backend/capabilities/` | ✅ M2 | 可插拔能力模块接口 `register(router, ctx)` |
+| **IPC 桥** | `src/main/ipc/index.ts` | ✅ M2 | `BackendProxy` IPC 转发 + 参数校验 |
+| **Preload** | `src/main/preload.ts` | ✅ M2 | `backendProxy()` 暴露给 Renderer |
+| **Onboarding Wizard** | `src/main/onboarding/` | 🔲 M2 planned | 硬件检测 → 模型推荐 → 下载引导 |
+| **Python FastAPI backend** | `src/backend_py/` | 🔲 M3 planned | 原生 MLX 绑定，替换 Node.js daemon |
+| **MemPalace 记忆模块** | `src/backend/memory/` | 🔲 M3 planned | 分层记忆 L0-L3 + SkillBank |
 
 ### 能力模块开发
 
