@@ -13,10 +13,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.AppPing, () => 'pong')
   ipcMain.handle(IpcChannels.AppVersion, () => app.getVersion())
   ipcMain.handle(IpcChannels.ShellOpenExternal, (_event, url: unknown) => {
-    if (typeof url !== 'string') return
+    if (typeof url !== 'string') return { ok: false, error: 'url must be a string' }
     const allowed = EXTERNAL_URL_ALLOWLIST.some((prefix) => url.startsWith(prefix))
-    if (allowed) {
-      shell.openExternal(url).catch((err) => console.error('openExternal failed', err))
-    }
+    if (!allowed) return { ok: false, error: 'url scheme not permitted' }
+    return shell.openExternal(url)
+      .then(() => ({ ok: true }))
+      .catch((err: Error) => ({ ok: false, error: err.message }))
   })
 }
