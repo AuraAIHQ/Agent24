@@ -1,4 +1,5 @@
 import type { LLMGateway } from './llm-gateway'
+export type { ModuleManifest, ModuleType, Permission } from '../shared/ipc-types'
 
 // ── LLM ──────────────────────────────────────────────────────────────────────
 
@@ -23,38 +24,9 @@ export interface LLMUsage {
   timestamp: number
 }
 
-// ── Capability Module ─────────────────────────────────────────────────────────
+// ── Capability context ────────────────────────────────────────────────────────
 
 export interface CapabilityContext {
   llm: LLMGateway
   moduleId: string
-}
-
-/**
- * type 'ui'       : ships a React component; shell renders it in the main area via sidebar nav.
- * type 'headless' : daemon-side routes only; results surface through chat / notifications.
- * type 'hybrid'   : has both a config UI page AND background capabilities.
- */
-export type ModuleType = 'ui' | 'headless' | 'hybrid'
-
-export type Permission =
-  | 'llm'         // call LLMGateway
-  | 'memory'      // read/write memory layer
-  | 'network'     // outbound HTTP
-  | 'filesystem'  // read/write local files
-  | 'wechat'      // WeChat bridge
-  | 'nostr'       // Nostr relay
-
-export interface ModuleManifest {
-  id: string                  // e.g. '@auraaihq/publish-blog'
-  version: string
-  name: string
-  description: string
-  type: ModuleType
-  permissions: Permission[]
-  navItem?: {                 // UI/hybrid only — injected into sidebar
-    icon: string
-    label: string
-    route: string
-  }
 }

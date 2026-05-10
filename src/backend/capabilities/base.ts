@@ -1,4 +1,5 @@
-import type { CapabilityContext, ModuleManifest } from '../types'
+import type { CapabilityContext } from '../types'
+import type { ModuleManifest } from '../../shared/ipc-types'
 
 export interface SimpleRouter {
   get(path: string, handler: RouteHandler): void
@@ -14,17 +15,14 @@ export interface RouteContext {
 export type RouteHandler = (ctx: RouteContext) => Promise<unknown> | unknown
 
 /**
- * Base interface for all capability modules.
- *
- * UI module (manifest.type = 'ui' | 'hybrid'):
+ * UI module (type='ui'|'hybrid'):
+ *   - Declares navItem → shell injects it into sidebar automatically
  *   - Ships a React component loaded lazily by the renderer
- *   - Component communicates with daemon via window.agent24.backendProxy()
- *   - Declares navItem in manifest → shell injects it into sidebar automatically
+ *   - Communicates back to daemon via window.agent24.backendProxy()
  *
- * Headless module (manifest.type = 'headless'):
+ * Headless module (type='headless'):
  *   - Registers daemon-side routes only, no renderer component
- *   - Results surface through chat bubbles or notifications in our generic UI
- *   - May spawn its own subprocess and proxy calls to its REST API
+ *   - Results surface through chat bubbles or notifications
  */
 export interface CapabilityModule {
   manifest: ModuleManifest
