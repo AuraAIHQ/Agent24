@@ -24,9 +24,6 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
-    "@auraaihq/core": "file:/Users/jason/Dev/auraai/auraai-packages/packages/core",
-    "@auraaihq/memory": "file:/Users/jason/Dev/auraai/auraai-packages/packages/memory",
-    "@auraaihq/sdk": "file:/Users/jason/Dev/auraai/auraai-packages/packages/sdk",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -39,7 +36,7 @@
     "@vitejs/plugin-react": "^4.3.0",
     "concurrently": "^9.0.0",
     "cross-env": "^7.0.3",
-    "electron": "^34.0.0",
+    "electron": "^34.5.8",
     "electron-builder": "^25.0.0",
     "eslint": "^8",
     "typescript": "^5.6.0",
@@ -57,6 +54,15 @@
     "files": [
       "dist/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/backend",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "mac": {
       "category": "public.app-category.productivity",

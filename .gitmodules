@@ -1,3 +1,6 @@
 [submodule "vendor/xiaoheishu"]
 	path = vendor/xiaoheishu
 	url = https://github.com/MushroomDAO/Xiaoheishu.git
+[submodule "vendor/gemma-chrome-translate"]
+	path = vendor/gemma-chrome-translate
+	url = https://github.com/lhfer/gemma-chrome-translate

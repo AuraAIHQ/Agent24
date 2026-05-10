@@ -683,6 +683,310 @@ Deprecated（archive 只读，README 引导到新位置）:
 
 ---
 
+## ADR-019：LLM Gateway 模式（能力模块不直接调用 LLM API）
+
+**日期**：2026-05-09
+**状态**：✅ 采纳
+
+### 背景
+
+M2 开始引入能力模块，每个模块都需要调用 LLM。备选方案：
+- A. 每个模块直接调用 LLM API（Ollama/OpenAI/Claude）
+- B. 统一 LLM Gateway，模块只调 `llm.chat()` 接口
+
+### 论证
+
+**直接调用（A）的问题**：
+- Token 用量分散，无法统计哪个模块消耗了多少资源
+- 每个模块各自实现错误处理、重试、超时，代码重复
+- 切换底层模型需要改所有模块
+- 无法在不改模块的前提下增加配额限制、响应缓存、审计日志
+- 模块作者需要知道 Ollama API 细节，耦合底层
+
+**Gateway 模式（B）的优势**：
+- 统一统计：按模块维度追踪 token 消耗，M3 可持久化到 SQLite
+- 可替换性：底层从 Ollama 切换到 OpenAI 兼容接口只改 Gateway，模块零感知
+- 权限控制：Gateway 可为不同模块设置不同配额（防止单个模块耗尽资源）
+- 缓存：相同 prompt 命中缓存，减少 Ollama 调用延迟（M3 实现）
+- 审计日志：所有 LLM 调用统一记录，满足 ADR-017 隐私追踪需求
+- 能力模块接口稳定：`llm.chat(req)` 签名不变，底层实现可独立演进
+
+### 决策
+
+**B**。所有能力模块只知道 `CapabilityContext.llm.chat()` 接口，不直接依赖 Ollama / OpenAI / Claude SDK。LLM Gateway 作为 `src/backend/llm-gateway.ts` 实现，M2 底层对接 Ollama，M3 扩展为可配置（通过 `LLM_BACKEND` 环境变量选择 Ollama / OpenAI 兼容 / Claude API）。
+
+---
+
+## ADR-020：后端 Daemon 技术选型（TypeScript + Node http，localhost:8765）
+
+**日期**：2026-05-09
+**状态**：✅ 采纳
+
+### 背景
+
+能力模块需要一个进程内 HTTP 服务，提供 REST 接口给 Electron renderer（通过 IPC proxy）和未来的 CLI 消费者。备选框架：
+- A. Python + FastAPI（跨语言 daemon）
+- B. Node.js + Express（老牌框架）
+- C. Node.js + Fastify（高性能 TypeScript 友好框架）
+- D. Node.js 内置 `http` 模块（零依赖，M2 过渡方案）
+
+### 论证
+
+**Python FastAPI（A）的问题**：
+- 语言上下文切换：团队主栈是 TypeScript，Python 会引入两套工具链（pip/poetry vs pnpm）
+- 打包体积：macOS 打包需带 Python runtime，增加 50-80MB
+- IPC 类型安全：跨语言时 TypeScript 类型无法端到端贯通
+
+**Express（B）vs Fastify（C）的对比**：
+- Fastify 性能比 Express 快约 35%（官方 benchmark）
+- Fastify 原生支持 JSON Schema 路由验证，与 TypeScript 配合更好
+- Fastify 插件系统与 CapabilityModule 注册模式天然契合
+
+**内置 http（D）的取舍**：
+- 零额外 npm 依赖，不增加 package.json 复杂度，M2 PR review 最简洁
+- 功能完全够 M2 需求（路由 + JSON 解析）
+- 注释标注"生产版本替换为 Fastify"，M3 升级时接口不变
+
+**端口选择**：
+- 8765：不与 3000（React dev）、5173（Vite）、8080（常见代理）、11434（Ollama）冲突
+- localhost 绑定：仅本机访问，不暴露公网
+
+**进程管理**：Electron main 通过 `child_process.fork()` 启动，共享 Node 运行时（比 spawn 省 50-100ms 启动时间），MessageChannel 可用于进程间快速通信（M3 扩展）。
+
+### 决策
+
+**D（M2）→ C（M3）**。M2 用 Node.js 内置 `http` 模块实现零依赖服务器，端口 8765，TypeScript 类型完整。M3 在不改变路由接口的前提下替换为 Fastify，获得验证、插件、更好的错误处理。Electron main 通过 BackendManager（`src/main/backend-manager.ts`）管理进程生命周期。
+
+---
+
+## ADR-021：一站式安装 — Zero-CLI Onboarding
+
+**日期**：2026-05-09
+**状态**：✅ 采纳（M2 实现 Onboarding Wizard，M3 完善 Ollama 捆绑）
+
+### 背景
+
+用户要求："面向小白的框架。安装之后打开做一个简单的配置，比如说下载对应的模型，不要让它去运行任何命令。"
+
+核心约束：**用户全程不触碰终端**。
+
+### 备选方案
+
+- **A. 仅安装 Electron App，文档说明手动装 Ollama**：最简，但有命令行操作，违背约束
+- **B. App 内引导用户去 Ollama 官网手动下载**：次优，减少命令行但有跳转摩擦
+- **C. App 启动时自动检测 + 下载安装 Ollama + 拉取模型**：完全无 CLI，用户体验最佳
+- **D. 把 Ollama 二进制捆绑进安装包**：最自包含，但 macOS .dmg 体积 +150-200MB
+
+### 论证
+
+**Ollama 下载策略**（C vs D）：
+| 维度 | C（运行时下载）| D（捆绑安装包）|
+|------|---------------|----------------|
+| 安装包大小 | < 200MB | ~350MB+ |
+| 离线首次使用 | ❌ 需联网 | ✅ |
+| Ollama 版本更新 | 自动（下载最新）| 需重新打包 App |
+| 实现复杂度 | 中 | 低 |
+| 竞品做法（Jan.ai）| 运行时检测 | — |
+
+M2 采用 C：检测 Ollama → 未装则下载安装包（GitHub releases API）→ 静默安装 → 拉取推荐模型。
+
+**硬件检测 → 模型推荐逻辑**：
+| RAM | 推荐模型 | 量化 |
+|-----|----------|------|
+| < 8GB | 提示"配置偏低，将使用云端 API 模式" | — |
+| 8-16GB | llama3:8b / qwen2.5:7b | Q4_K_M |
+| 16-32GB | llama3:13b / qwen2.5:14b | Q4_K_M |
+| > 32GB | llama3:70b / qwen2.5:32b | Q4_K_M |
+
+GPU 检测（Metal/CUDA 可用时）可升一档模型。
+
+**Onboarding Wizard 流程**（首次启动）：
+```
+Step 1: 欢迎页 — 说明 Agent24 是什么
+Step 2: 环境检测 — 检测 RAM/GPU/已有 Ollama（自动，2-3秒）
+Step 3: 推荐方案 — 展示推荐模型及理由，可手动选其他
+Step 4: 安装进度 — Ollama 下载/安装 + 模型拉取（进度条）
+Step 5: 就绪 — 首次对话界面
+```
+
+如果用户已有 Ollama（检测到 localhost:11434 响应），跳过 Step 4 的 Ollama 安装部分，只拉取模型。
+
+### 决策
+
+**实现路径**：
+- `src/main/ollama-manager.ts`：检测 → 下载安装 → 启动/停止 Ollama 进程
+- `src/renderer/onboarding/`：5 步 Wizard UI（React）
+- `src/main/hardware-detect.ts`：RAM + GPU 检测（Node `os.totalmem()` + systeminformation 包）
+- Wizard 完成状态持久化到 `userData/onboarding-complete.json`，已完成则直接进主界面
+
+**打包策略**：Ollama 二进制**不**捆绑进 .dmg，运行时下载（M3 重新评估是否捆绑）。
+**更新**：Ollama 由 App 管理，不依赖用户系统已有的 Ollama，避免版本冲突。
+
+---
+
+## ADR-022：LLM 运行时默认 MLX，UI 可切换
+
+**日期**：2026-05-09
+**状态**：✅ 采纳（修正 ADR-019/021 中"默认 Ollama"的假设）
+
+### 背景
+
+用户明确要求："不一定 Ollama，默认我想用 oMLX，但是用户可以切换为 Ollama 或者其他类似工具，在界面配置即可。"
+
+ADR-019 的 LLM Gateway 设计假设底层是 Ollama，需要修正。
+
+### 备选 LLM 运行时（Apple Silicon Mac 场景）
+
+| 运行时 | 特点 | 适合场景 |
+|--------|------|----------|
+| **MLX**（默认）| Apple 官方 ML 框架，Metal GPU 原生，Apple Silicon 最优 | 日常对话、本地隐私 |
+| **Ollama** | 最流行，生态最广，API 兼容 OpenAI | 跨平台、丰富模型库 |
+| **Rapid-MLX** | 号称比 Ollama 快 4.2×，专注极致性能 | 高频调用、延迟敏感 |
+| **LM Studio** | 图形化，开箱即用，有 REST API | 不熟命令行的用户 |
+| **远程 API** | Claude / OpenAI / DeepSeek | 本地算力不足时 |
+
+### 论证
+
+**MLX 作为默认**：
+- Apple Silicon Mac 用户（M1/M2/M3/M4）占本框架目标用户大多数
+- MLX 由 Apple 维护，Metal GPU 加速原生，统一内存利用率最高
+- MLX 是 Python 库，天然与 Python 后端（ADR-023）集成
+- Rapid-MLX 作为 MLX 的性能加强版值得关注（benchmark 验证后可切换）
+
+**可切换的必要性**：
+- 不同用户硬件不同（非 Apple Silicon 无法用 MLX）
+- 不同任务偏好不同模型生态
+- 避免供应商锁定
+
+**LLM Gateway 抽象层（ADR-019）的价值在此体现**：所有能力模块只调 `llm.chat()`，底层运行时通过配置切换，模块代码零改动。
+
+### 决策
+
+- **默认**：MLX（`mlx-lm` 库）
+- **可切换**：Ollama / Rapid-MLX / LM Studio API / 远程 OpenAI-compatible API
+- **切换入口**：设置页 → LLM 运行时配置（下拉选择 + 地址/端口/API Key 输入）
+- **Gateway 适配层**：每个运行时实现同一 `LLMAdapter` 接口（`chat(messages) → AsyncGenerator`）
+
+---
+
+## ADR-023：后端语言从 Node.js 切换到 Python FastAPI（M3 执行）
+
+**日期**：2026-05-09
+**状态**：✅ 采纳（部分修正 ADR-020，M3 执行切换）
+
+### 背景
+
+ADR-020 选择了 Node.js + 内置 http（M2 过渡）。但 ADR-022 确定 MLX 为默认运行时后，Python 成为后端的自然选择。
+
+用户提供的参考文档明确推荐：**Python 3.11+ + FastAPI + uvicorn**。
+
+### 论证
+
+**为什么 Python**：
+| 能力需求 | Node.js | Python |
+|----------|---------|--------|
+| MLX 集成 | ❌ 需跨进程调用 | ✅ 原生 `import mlx` |
+| ComfyUI / SD 集成 | 仅 HTTP 调用 | ✅ 原生调用 + HTTP |
+| LangChain / LlamaIndex | 有 JS 版但不完整 | ✅ 最成熟生态 |
+| Playwright 自动化 | ✅ 同等 | ✅ 同等 |
+| asyncio 工作流引擎 | 需要额外设计 | ✅ 原生 asyncio.Queue |
+| FastAPI（类型、文档、异步）| — | ✅ 生产成熟 |
+
+**M2 Node.js 实现的价值**：
+- 证明了 Electron main → 后端 daemon → LLM Gateway 的架构可行性
+- IPC 接口、健康检查、进程管理逻辑可直接复用
+- M2 作为骨架，M3 替换后端语言，前端和 IPC 接口不变
+
+### 决策
+
+| 阶段 | 后端实现 |
+|------|---------|
+| M2（当前）| Node.js 内置 http，零依赖，验证架构 |
+| M3 | Python 3.11 + FastAPI + uvicorn，端口保持 8765 |
+| M4+ | 同一 Python 进程内集成 MLX / ComfyUI / Playwright |
+
+**接口约定**：M3 Python 后端实现与 M2 完全相同的 REST 接口（`/health`、`/api/llm/chat`、`/api/llm/usage`、能力模块路由），Electron 侧 BackendManager 无需改动。
+
+---
+
+## ADR-024：工作流引擎 — asyncio.Queue + Step 模式
+
+**日期**：2026-05-09
+**状态**：✅ 采纳
+
+### 背景
+
+后台需要支持多步骤异步工作流（如"生成文案 → 生成图片 → 合成视频 → 发布"），需要选择任务调度方案。
+
+### 备选
+
+- **A. Prefect / Temporal**：企业级，功能完整，但重——需要独立服务
+- **B. Celery + Redis**：成熟，但需要 Redis，增加部署依赖
+- **C. Python asyncio.Queue + Step**：轻量，无外部依赖，适合单机场景
+
+### 论证
+
+本框架定位是"个人/小团队私有化生产力中台"，单机运行，无需分布式调度：
+- Prefect/Temporal 引入了协调服务，违背"零命令行"原则
+- asyncio.Queue 是标准库，零依赖，与 FastAPI 天然集成
+- 每个 Step 实现为 `async def step(ctx) -> StepResult`，可调用任意能力（MLX / ComfyUI / Playwright / 外部 API）
+- 进度通过 WebSocket 实时推送给前端
+
+### 核心 API 端点（同文档规范）
+
+```
+POST /api/v1/chat              — 多轮对话（调 LLM Gateway）
+POST /api/v1/workflow/run      — 启动工作流（返回 task_id）
+GET  /api/v1/task/{id}         — 任务状态查询（进度、日志、结果）
+WS   /ws/task/{id}             — 实时进度推送（WebSocket）
+POST /api/v1/files/upload      — 媒体文件上传
+GET  /api/v1/files/{id}        — 结果文件下载
+```
+
+所有路径加版本号 `/api/v1/...`，预留升级空间。
+
+### 内置工作流模板（初期硬编码）
+
+- `short-video`：文案生成 → 图生视频 → 字幕合成 → 导出
+- `social-publish`：内容生成 → 审核 → 多平台发布
+- `research-digest`：网页抓取 → 提炼摘要 → 邮件/推送
+
+### 决策
+
+**asyncio.Queue + Step + WebSocket 推送**。SQLite 持久化任务记录（`aiosqlite` 库），无需外部数据库。
+
+---
+
+## ADR-025：内存管理 — 串行 LLM 推理 + 模型热切换限制
+
+**日期**：2026-05-09
+**状态**：✅ 采纳
+
+### 背景
+
+64GB 统一内存虽大，但同时运行 LLM + ComfyUI + Playwright 可能吃紧。需要显式的并发控制策略。
+
+### 数据参考（64GB Mac）
+
+| 场景 | 内存占用 |
+|------|---------|
+| 70B Q4 LLM | ~40GB |
+| 34B Q4 LLM | ~20GB |
+| 13B Q4 LLM | ~8GB |
+| ComfyUI + SD XL | ~8-12GB |
+| macOS + Electron + 后台 | ~6-8GB |
+
+同时跑 34B LLM + ComfyUI + 系统 = ~36GB，勉强可行但有风险。
+
+### 决策
+
+1. **LLM 推理串行**：任务队列中同一时刻最多 1 个 LLM 推理，后续请求排队等待
+2. **能力模块并发**：非 LLM 步骤（Playwright 抓取、文件处理）可并发
+3. **模型卸载策略**：Ollama 模式下换模型时自动卸载旧模型；MLX 模式下显式 `del model; gc.collect()` 释放
+4. **内存警告**：后台监控系统内存，低于阈值（默认 6GB）时暂停新任务入队并推送告警到前端
+
+---
+
 ## 附：决策中我（Claude）犯的错误（用于改进）
 
 | 错误 | 教训 |
