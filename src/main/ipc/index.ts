@@ -12,6 +12,7 @@ import type {
   OmlxModelsResult,
   OmlxStartResult,
   OmlxStopResult,
+  OmlxWarmupResult,
 } from '../../shared/ipc-types'
 
 const BACKEND_PORT = 8765
@@ -135,6 +136,25 @@ export function registerIpcHandlers(): void {
     omlxProcess = execFile('omlx', args, { env: { ...process.env } })
     omlxProcess.on('exit', () => { omlxProcess = null })
     return { ok: true, url: `http://127.0.0.1:${port ?? 8000}` }
+  })
+
+  // oMLX: warmup a model by sending a minimal chat request (triggers LLM load into memory)
+  ipcMain.handle(IpcChannels.OmlxWarmup, async (_event, url: unknown, apiKey: unknown, modelId: unknown): Promise<OmlxWarmupResult> => {
+    if (typeof url !== 'string' || typeof modelId !== 'string') return { model: String(modelId), ok: false, error: 'invalid args' }
+    const key = typeof apiKey === 'string' ? apiKey : ''
+    return new Promise((resolve) => {
+      const body = JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 })
+      const parsed = new URL(`${url}/v1/chat/completions`)
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(body)) }
+      if (key) headers['Authorization'] = `Bearer ${key}`
+      const req = http.request({ hostname: parsed.hostname, port: parsed.port || 80, path: parsed.pathname, method: 'POST', headers, timeout: 60000 }, (res) => {
+        res.resume()
+        resolve({ model: modelId, ok: (res.statusCode ?? 500) < 400 })
+      })
+      req.on('error', (e) => resolve({ model: modelId, ok: false, error: (e as Error).message }))
+      req.write(body)
+      req.end()
+    })
   })
 
   // oMLX: stop server — kills both app-spawned and externally-started processes

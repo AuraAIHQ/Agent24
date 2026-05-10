@@ -11,6 +11,7 @@ import {
   type OmlxModelsResult,
   type OmlxStartResult,
   type OmlxStopResult,
+  type OmlxWarmupResult,
 } from '../shared/ipc-types'
 
 const api = {
@@ -27,6 +28,8 @@ const api = {
     ipcRenderer.invoke(IpcChannels.OmlxStart, port, apiKey),
   omlxStop: (): Promise<OmlxStopResult> =>
     ipcRenderer.invoke(IpcChannels.OmlxStop),
+  omlxWarmup: (url: string, apiKey: string, modelId: string): Promise<OmlxWarmupResult> =>
+    ipcRenderer.invoke(IpcChannels.OmlxWarmup, url, apiKey, modelId),
 } as const
 
 contextBridge.exposeInMainWorld('agent24', api)

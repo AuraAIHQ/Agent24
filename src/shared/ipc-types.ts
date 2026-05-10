@@ -10,6 +10,7 @@ export const IpcChannels = {
   OmlxModels: 'omlx:models',
   OmlxStart: 'omlx:start',
   OmlxStop: 'omlx:stop',
+  OmlxWarmup: 'omlx:warmup',
 } as const
 
 export type IpcChannel = typeof IpcChannels[keyof typeof IpcChannels]
@@ -48,4 +49,10 @@ export interface OmlxStartResult {
 
 export interface OmlxStopResult {
   ok: boolean
+}
+
+export interface OmlxWarmupResult {
+  model: string
+  ok: boolean
+  error?: string
 }
