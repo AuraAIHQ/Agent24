@@ -6,7 +6,7 @@ const MODULES: CapabilityModule[] = [pingModule]
 
 export function registerAll(router: SimpleRouter, llmCtx: Omit<CapabilityContext, 'moduleId'>): void {
   for (const mod of MODULES) {
-    const ctx: CapabilityContext = { ...llmCtx, moduleId: mod.id }
+    const ctx: CapabilityContext = { ...llmCtx, moduleId: mod.manifest.id }
     mod.register(router, ctx)
   }
 }
