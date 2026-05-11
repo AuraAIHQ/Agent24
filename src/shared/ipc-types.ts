@@ -14,6 +14,8 @@ export const IpcChannels = {
   ModulesList: 'modules:list',
   ModulesEnable: 'modules:enable',
   ModulesDisable: 'modules:disable',
+  ModulesInstall: 'modules:install',
+  ModulesUninstall: 'modules:uninstall',
   LlmStatus: 'llm:status',
 } as const
 
@@ -93,4 +95,15 @@ export interface LlmStatusResult {
   provider: 'omlx' | 'ollama' | 'none'
   url: string
   model: string
+}
+
+export interface ModuleInstallResult {
+  ok: boolean
+  id?: string        // module id if successfully loaded
+  error?: string
+}
+
+export interface ModuleUninstallResult {
+  ok: boolean
+  error?: string
 }
