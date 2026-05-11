@@ -11,13 +11,15 @@ export default function HelloModule() {
 
   async function greet() {
     if (!name.trim() || loading) return
+    // Limit name length to prevent oversized prompts
+    const safeName = name.trim().slice(0, 80)
     setLoading(true)
     setGreeting('')
     try {
       const res = await window.agent24.backendProxy({
         method: 'POST',
         path: '/api/modules/hello/greet',
-        body: { name: name.trim() },
+        body: { name: safeName },
       })
       if (res.ok) {
         setGreeting((res.data as { greeting: string }).greeting)

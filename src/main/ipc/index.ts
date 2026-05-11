@@ -162,8 +162,10 @@ export function registerIpcHandlers(): void {
   // oMLX: stop server — kills both app-spawned and externally-started processes
   ipcMain.handle(IpcChannels.OmlxStop, (): OmlxStopResult => {
     if (omlxProcess) { omlxProcess.kill('SIGTERM'); omlxProcess = null }
-    // Also kill any omlx serve process not started by us (e.g. manual terminal launch)
-    execFile('pkill', ['-f', 'omlx serve'], () => { /* ignore exit code */ })
+    // pkill is macOS/Linux only; on Windows this is a no-op (omlx is not supported there yet)
+    if (process.platform !== 'win32') {
+      execFile('pkill', ['-f', 'omlx serve'], () => { /* ignore exit code */ })
+    }
     return { ok: true }
   })
   // modules:list — returns manifests of all registered capability modules
