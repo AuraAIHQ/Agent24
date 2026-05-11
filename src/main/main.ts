@@ -12,6 +12,8 @@ const backendManager = new BackendManager()
 let tray: Tray | null = null
 // Mutable reference so tray handlers always point to the current window
 let mainWin: BrowserWindow | null = null
+// Set to true by before-quit so win.on('close') guard is skipped on app exit
+let isQuitting = false
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -31,11 +33,10 @@ function createMainWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => win.show())
 
-  // While the tray is active, intercept close → hide instead of destroy.
-  // When quitting via tray "Quit Agent24", tray is set to null first so
-  // this guard is skipped and the window closes normally.
+  // While the tray is active and app is not quitting, intercept close → hide.
+  // isQuitting is set in before-quit so Cmd+Q / app-menu Quit work normally.
   win.on('close', (e) => {
-    if (tray) {
+    if (tray && !isQuitting) {
       e.preventDefault()
       win.hide()
     }
@@ -122,6 +123,10 @@ app.whenReady().then(() => {
 
   // macOS: re-open window when dock icon clicked with no windows open
   app.on('activate', () => showOrCreateWindow())
+})
+
+app.on('before-quit', () => {
+  isQuitting = true
 })
 
 app.on('will-quit', () => {
