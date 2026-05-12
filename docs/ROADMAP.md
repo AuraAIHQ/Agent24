@@ -89,11 +89,11 @@
 - [x] `src/renderer/pages/CodeSandbox.tsx`：Python 代码编辑器 + 运行按钮 + 输出面板 + BoxLite 可用性状态
 - [x] 全部 67 个测试通过，TypeScript typecheck 通过
 
-### 待完成（M3 收尾）
+### 已全部完成（2026-05-12 确认）
 
-- [ ] Chat 页面接入真实 LLM（当前为 placeholder）
-- [ ] Workbench 页面功能实现
-- [ ] IPC handlers for modules:install / modules:uninstall（preload bridge）
+- [x] Chat 页面接入真实 LLM（`POST /api/llm/chat`，oMLX → Ollama failover，用户已验证可用）
+- [x] IPC bridge：`modules:install` / `modules:uninstall` handlers 在 `ipc/index.ts` + preload 均已实现
+- [ ] Workbench 页面功能实现（当前为占位骨架，M4 规划）
 - [ ] PR#13 David review → merge
 
 ---
