@@ -3,6 +3,7 @@ import type { CapabilityContext } from './types'
 import pingModule from './capabilities/example-ping'
 import summarizeModule from './capabilities/example-summarize'
 import helloUiModule from './capabilities/example-hello-ui'
+import codeboxModule from './capabilities/example-codebox'
 import { discoverInstalledModules, loadInstalledModule } from './module-installer'
 
 // Built-in bundled modules (always present)
@@ -10,6 +11,7 @@ export const MODULES: CapabilityModule[] = [
   pingModule,
   summarizeModule,
   helloUiModule,
+  codeboxModule,
 ]
 
 // Community modules installed at runtime (~/.agent24/modules/)

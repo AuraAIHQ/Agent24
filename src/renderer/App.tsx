@@ -11,10 +11,12 @@ import ModelsPage from './pages/Models'
 import SettingsPage from './pages/Settings'
 import ModulesManagerPage from './pages/ModulesManager'
 import HelloModule from './pages/modules/HelloModule'
+import CodeSandboxPage from './pages/CodeSandbox'
 
 // Static module route map — M2 will replace this with dynamic import()
 const MODULE_PAGES: Record<string, React.ComponentType> = {
   '/modules/hello': HelloModule,
+  'codebox': CodeSandboxPage,
 }
 
 type BuiltinPage = 'chat' | 'workbench' | 'models' | 'settings' | 'modules-manager'
