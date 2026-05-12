@@ -4,7 +4,9 @@ import pingModule from './capabilities/example-ping'
 import summarizeModule from './capabilities/example-summarize'
 import helloUiModule from './capabilities/example-hello-ui'
 import codeboxModule from './capabilities/example-codebox'
+import serviceBoxModule from './capabilities/example-service-box'
 import { discoverInstalledModules, loadInstalledModule } from './module-installer'
+import { startService } from './boxlite-service'
 
 // Built-in bundled modules (always present)
 export const MODULES: CapabilityModule[] = [
@@ -12,6 +14,7 @@ export const MODULES: CapabilityModule[] = [
   summarizeModule,
   helloUiModule,
   codeboxModule,
+  serviceBoxModule,
 ]
 
 // Community modules installed at runtime (~/.agent24/modules/)
@@ -48,10 +51,17 @@ export function registerCommunityModule(
   _communityModules.push(mod)
   const router = routerFactory(mod.manifest.id)
   mod.register(router, { ...llmCtx, moduleId: mod.manifest.id })
-  // M3: ensure declared models are loaded — fire and forget, don't block registration
+  // M3: ensure declared LLM models are loaded — non-blocking
   if (mod.manifest.models?.length) {
     void llmCtx.llm.ensureModels(mod.manifest.models).catch((err) => {
       console.warn(`[registry] ensureModels failed for ${mod.manifest.id}:`, err)
+    })
+  }
+  // M4: start service container if declared — non-blocking
+  if (mod.manifest.container) {
+    void startService(mod.manifest.id, mod.manifest.container).then((r) => {
+      if (r.ok) console.log(`[registry] service ${mod.manifest.id} started on :${r.hostPort}`)
+      else console.warn(`[registry] service ${mod.manifest.id} failed to start:`, r.error)
     })
   }
   return true
@@ -73,5 +83,12 @@ export function registerAll(
     const router = routerFactory(mod.manifest.id)
     const ctx: CapabilityContext = { ...llmCtx, moduleId: mod.manifest.id }
     mod.register(router, ctx)
+    // M4: auto-start service containers declared in bundled modules
+    if (mod.manifest.container) {
+      void startService(mod.manifest.id, mod.manifest.container).then((r) => {
+        if (r.ok) console.log(`[registry] service ${mod.manifest.id} started on :${r.hostPort}`)
+        else console.warn(`[registry] service ${mod.manifest.id} failed to start:`, r.error)
+      })
+    }
   }
 }

@@ -1,5 +1,6 @@
 // Backend daemon — Node.js built-in http server (M2 zero-dependency approach).
-// M3: replace with Fastify for schema validation, plugin system, and better perf.
+// M3: community module installer, oMLX model management.
+// M4: BoxLite service container proxy (/api/svc/:moduleId/*).
 
 import http from 'node:http'
 import { URL } from 'node:url'
@@ -13,6 +14,7 @@ import {
 } from './capability-registry'
 import { loadState, isEnabled, setEnabled } from './module-state'
 import { installModule, uninstallModule, loadInstalledModule } from './module-installer'
+import { proxyToService, getHostPort } from './boxlite-service'
 import type { SimpleRouter, RouteContext, RouteHandler } from './capabilities/base'
 import type { LLMRequest } from './types'
 
@@ -70,6 +72,25 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   const base = `http://${HOST}`
   const url = new URL(req.url ?? '/', base)
   const method = (req.method ?? 'GET').toUpperCase() as 'GET' | 'POST'
+
+  // M4: service container proxy — prefix match /api/svc/:moduleId/*
+  if (url.pathname.startsWith('/api/svc/')) {
+    const parts = url.pathname.split('/')           // ['', 'api', 'svc', moduleId, ...rest]
+    const moduleId = decodeURIComponent(parts[3] ?? '')
+    const subPath = '/' + parts.slice(4).join('/')
+    if (!moduleId) { send(res, 400, { error: 'moduleId required' }); return }
+    if (getHostPort(moduleId) === null) { send(res, 503, { error: `Service ${moduleId} not running` }); return }
+    const body = method === 'POST' ? await readBody(req) : undefined
+    try {
+      const result = await proxyToService(moduleId, method, subPath, url.search, body)
+      const payload = JSON.stringify(result.body)
+      res.writeHead(result.status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) })
+      res.end(payload)
+    } catch (err) {
+      send(res, 502, { error: err instanceof Error ? err.message : 'Proxy error' })
+    }
+    return
+  }
 
   // Special: module enable/disable (parameterised — not in the routes Map)
   const enableMatch = url.pathname.match(/^\/api\/modules\/([^/]+)\/(enable|disable)$/)
