@@ -84,6 +84,8 @@ export interface ModuleManifest {
   type: ModuleType
   permissions: Permission[]
   navItem?: ModuleNavItem
+  /** M3: LLM models this module needs — Gateway will ensure they're loaded on register */
+  models?: string[]
 }
 
 // ModuleManifest extended with runtime enable/disable state

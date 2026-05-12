@@ -147,7 +147,11 @@ export function App(): JSX.Element {
           {moduleNavItems.length === 0 && (
             <>
               <div className="nav-section">能力模块</div>
-              <button className="nav-item" style={{ opacity: 0.5, cursor: 'default' }}>
+              <button
+                className="nav-item"
+                onClick={() => setPage('modules-manager')}
+                style={{ opacity: 0.7 }}
+              >
                 <span className="icon">➕</span>
                 <span>安装模块</span>
               </button>

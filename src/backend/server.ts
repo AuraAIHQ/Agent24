@@ -106,7 +106,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
     const mod = loadInstalledModule(result.modulePath)
     if (!mod) {
-      send(res, 500, { ok: false, error: 'Package installed but does not export a valid CapabilityModule' })
+      // Roll back: uninstall the package so the system stays consistent
+      await uninstallModule(packageName)
+      send(res, 500, { ok: false, error: 'Package installed but does not export a valid CapabilityModule — rolled back' })
       return
     }
     registerCommunityModule(mod, buildRouter, { llm: gateway })
@@ -170,6 +172,12 @@ function registerCoreRoutes(): void {
   })
 
   routes.set('GET /api/llm/usage', { handler: () => gateway.getUsage(), moduleId: 'system' })
+
+  // M3: list all models known to oMLX with load status
+  routes.set('GET /api/llm/models', {
+    handler: () => gateway.listModels(),
+    moduleId: 'system',
+  })
 
   routes.set('POST /api/llm/chat', {
     handler: async (ctx) => {
