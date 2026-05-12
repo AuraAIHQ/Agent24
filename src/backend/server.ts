@@ -14,7 +14,7 @@ import {
 } from './capability-registry'
 import { loadState, isEnabled, setEnabled } from './module-state'
 import { installModule, uninstallModule, loadInstalledModule } from './module-installer'
-import { proxyToService, getHostPort } from './boxlite-service'
+import { proxyToService, getHostPort, stopAll } from './boxlite-service'
 import type { SimpleRouter, RouteContext, RouteHandler } from './capabilities/base'
 import type { LLMRequest } from './types'
 
@@ -76,9 +76,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   // M4: service container proxy — prefix match /api/svc/:moduleId/*
   if (url.pathname.startsWith('/api/svc/')) {
     const parts = url.pathname.split('/')           // ['', 'api', 'svc', moduleId, ...rest]
-    const moduleId = decodeURIComponent(parts[3] ?? '')
+    let moduleId: string
+    try { moduleId = decodeURIComponent(parts[3] ?? '') } catch { send(res, 400, { error: 'Invalid moduleId encoding' }); return }
     const subPath = '/' + parts.slice(4).join('/')
     if (!moduleId) { send(res, 400, { error: 'moduleId required' }); return }
+    // M3: reject path traversal / encoded slashes / CRLF injection
+    if (/(^|\/)\.\.($|\/)|\r|\n|%2f|%5c/i.test(subPath)) { send(res, 400, { error: 'Invalid service path' }); return }
+    // H3: respect module enabled state
+    if (!isEnabled(moduleId)) { send(res, 503, { error: 'Module disabled', id: moduleId }); return }
     if (getHostPort(moduleId) === null) { send(res, 503, { error: `Service ${moduleId} not running` }); return }
     const body = method === 'POST' ? await readBody(req) : undefined
     try {
@@ -219,8 +224,11 @@ function start(): void {
   registerCoreRoutes()
   registerAll((moduleId) => buildRouter(moduleId), { llm: gateway })
 
+  // M4: unhandled rejection safety net — always send 500 instead of hanging connection
   const server = http.createServer((req, res) => {
-    void handleRequest(req, res)
+    handleRequest(req, res).catch(() => {
+      if (!res.headersSent) send(res, 500, { error: 'Internal error' })
+    })
   })
 
   server.listen(PORT, HOST, () => {
@@ -232,8 +240,11 @@ function start(): void {
     process.exit(1)
   })
 
+  // H2: stop all service containers before exiting so no orphan VMs remain
   process.on('SIGTERM', () => {
-    server.close(() => process.exit(0))
+    server.close(() => {
+      void stopAll().finally(() => process.exit(0))
+    })
   })
 }
 

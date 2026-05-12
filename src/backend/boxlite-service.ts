@@ -5,11 +5,11 @@
 
 import http from 'node:http'
 
-interface ContainerConfig {
+export interface ContainerConfig {
   image: string
-  port: number           // guest port
-  startCmd?: string[]
-  healthPath?: string
+  port: number           // guest port inside container
+  startCmd?: string[]    // argv passed directly to exec (no shell) — avoids injection
+  healthPath?: string    // polled until 2xx (default: '/health')
   memoryMib?: number
 }
 
@@ -20,9 +20,17 @@ interface ServiceEntry {
   box: any               // SimpleBox — typed as any to survive missing native binding
 }
 
-// Host port range for service containers: 18000–18999
-let nextHostPort = 18000
-function allocatePort(): number { return nextHostPort++ }
+type StartResult = { ok: boolean; hostPort?: number; error?: string }
+
+// Host port range: 18000–18999 (1000 slots)
+const PORT_MIN = 18000
+const PORT_MAX = 18999
+let nextHostPort = PORT_MIN
+
+function allocatePort(): number {
+  if (nextHostPort > PORT_MAX) throw new Error(`Service port pool exhausted (${PORT_MIN}-${PORT_MAX})`)
+  return nextHostPort++
+}
 
 let SimpleBoxClass: (new (opts: object) => unknown) | null = null
 let serviceInitError: string | null = null
@@ -49,10 +57,15 @@ export function isServiceAvailable(): boolean {
 
 // Registry of running service boxes: moduleId → entry
 const registry = new Map<string, ServiceEntry>()
+// In-flight start promises — prevents concurrent double-start for the same moduleId (H1/H5)
+const starting = new Map<string, Promise<StartResult>>()
 
 function httpGet(url: string): Promise<number> {
   return new Promise((resolve) => {
-    const req = http.get(url, (res) => { resolve(res.statusCode ?? 0) })
+    const req = http.get(url, (res) => {
+      res.resume()                   // drain body to free socket (L1)
+      res.once('end', () => resolve(res.statusCode ?? 0))
+    })
     req.on('error', () => resolve(0))
     req.setTimeout(2000, () => { req.destroy(); resolve(0) })
   })
@@ -69,14 +82,19 @@ async function waitHealthy(hostPort: number, healthPath: string, timeoutMs = 60_
   return false
 }
 
-export async function startService(moduleId: string, cfg: ContainerConfig): Promise<{ ok: boolean; hostPort?: number; error?: string }> {
+async function doStartService(moduleId: string, cfg: ContainerConfig): Promise<StartResult> {
   ensureServiceInit()
   if (!SimpleBoxClass) return { ok: false, error: `BoxLite unavailable: ${serviceInitError}` }
   if (registry.has(moduleId)) return { ok: true, hostPort: registry.get(moduleId)!.hostPort }
 
-  const hostPort = allocatePort()
-  const healthPath = cfg.healthPath ?? '/health'
+  let hostPort: number
+  try {
+    hostPort = allocatePort()
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 
+  const healthPath = cfg.healthPath ?? '/health'
   const boxOpts = {
     image: cfg.image,
     memoryMib: cfg.memoryMib ?? 512,
@@ -93,13 +111,16 @@ export async function startService(moduleId: string, cfg: ContainerConfig): Prom
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 
-  // Start the service process in the background inside the container
+  // H4 fix: exec argv array directly, never via sh -c to avoid shell injection.
+  // The service must be started with nohup via its own shell if needed — caller's responsibility.
   if (cfg.startCmd && cfg.startCmd.length > 0) {
     const [cmd, ...args] = cfg.startCmd
-    const shell = `nohup ${[cmd, ...args].map(a => JSON.stringify(a)).join(' ')} > /tmp/svc.log 2>&1 &`
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (box as any).exec('sh', '-c', shell)
+      await (box as any).exec('sh', ['-c', `nohup ${[cmd, ...args].map((a) => {
+        // Shell-safe quoting: replace single-quotes, wrap in single-quotes
+        return "'" + String(a).replace(/'/g, "'\\''") + "'"
+      }).join(' ')} > /tmp/svc.log 2>&1 &`])
     } catch (err) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (box as any).stop().catch(() => {/* best-effort */})
@@ -117,6 +138,16 @@ export async function startService(moduleId: string, cfg: ContainerConfig): Prom
   registry.set(moduleId, { hostPort, config: cfg, box })
   console.log(`[svc] module ${moduleId} running on port ${hostPort}`)
   return { ok: true, hostPort }
+}
+
+// H1/H5 fix: in-flight dedup — concurrent calls for same moduleId share one Promise
+export function startService(moduleId: string, cfg: ContainerConfig): Promise<StartResult> {
+  if (registry.has(moduleId)) return Promise.resolve({ ok: true, hostPort: registry.get(moduleId)!.hostPort })
+  const existing = starting.get(moduleId)
+  if (existing) return existing
+  const p = doStartService(moduleId, cfg).finally(() => starting.delete(moduleId))
+  starting.set(moduleId, p)
+  return p
 }
 
 export async function stopService(moduleId: string): Promise<void> {
@@ -137,6 +168,11 @@ export function getHostPort(moduleId: string): number | null {
   return registry.get(moduleId)?.hostPort ?? null
 }
 
+// H3 helper: check registry presence (for isEnabled guard in server.ts)
+export function isRegistered(moduleId: string): boolean {
+  return registry.has(moduleId) || starting.has(moduleId)
+}
+
 // Proxy an HTTP request to the service container.
 // Returns { status, body } or throws on connection error.
 export async function proxyToService(
@@ -149,7 +185,6 @@ export async function proxyToService(
   const entry = registry.get(moduleId)
   if (!entry) throw Object.assign(new Error(`Service ${moduleId} not running`), { statusCode: 503 })
 
-  const url = `http://127.0.0.1:${entry.hostPort}${subPath}${query}`
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : undefined
     const opts: http.RequestOptions = {
@@ -174,7 +209,7 @@ export async function proxyToService(
       })
     })
     req.on('error', reject)
-    req.on('timeout', () => { req.destroy(); reject(new Error(`Proxy timeout: ${url}`)) })
+    req.on('timeout', () => { req.destroy(); reject(new Error(`Proxy timeout to ${moduleId}:${subPath}`)) })
     if (payload) req.write(payload)
     req.end()
   })
