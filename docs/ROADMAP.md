@@ -8,7 +8,7 @@
 
 ## M0（Bootstrap）— ✅ 完成
 
-- [x] 创建 `AuraAIHQ/Agent24-Desktop` 仓库
+- [x] 创建仓库（原 `AuraAIHQ/Agent24-Desktop`，已迁移为 `AuraAIHQ/Agent24`，2026-05-13）
 - [x] 写产品计划 `docs/PLAN.md`、决策日志 `docs/decision.md`（ADR-001~025）
 - [x] 注册 npm scope `@auraaihq`，模块分类与命名规则确认
 
