@@ -217,10 +217,14 @@ export async function proxyToService(
       const chunks: Buffer[] = []
       res.on('data', (c: Buffer) => chunks.push(c))
       res.on('end', () => {
-        // L2: pass container headers through transparently (strip hop-by-hop headers)
+        // L2: pass container headers through transparently (strip RFC 7230 hop-by-hop headers)
+        const HOP_BY_HOP = new Set([
+          'transfer-encoding', 'connection', 'keep-alive',
+          'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'upgrade',
+        ])
         const fwd: Record<string, string> = {}
         for (const [k, v] of Object.entries(res.headers)) {
-          if (!['transfer-encoding', 'connection', 'keep-alive'].includes(k.toLowerCase()) && typeof v === 'string') {
+          if (!HOP_BY_HOP.has(k.toLowerCase()) && typeof v === 'string') {
             fwd[k] = v
           }
         }

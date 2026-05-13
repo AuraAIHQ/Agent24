@@ -607,6 +607,8 @@ sysctl kern.hv_support
 container: {
   image: 'python:slim',
   port: 8000,
+  // <b64> 是 SCRIPT_B64 常量的实际值，由 Node.js 在模块加载时生成（Buffer.from(script).toString('base64')）
+  // 这里用 <b64> 占位表示，实际代码见 src/backend/capabilities/example-service-box.ts
   startCmd: ['sh', '-c', 'echo <b64> | base64 -d > /tmp/svc.py && python /tmp/svc.py'],
   healthPath: '/health',
   memoryMib: 256,
