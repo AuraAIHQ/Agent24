@@ -22,7 +22,8 @@ interface ServiceEntry {
 
 type StartResult = { ok: boolean; hostPort?: number; error?: string }
 
-// Host port range: 18000–18999 (1000 slots)
+// Host port range: 18000–18999 (1000 slots).
+// Ports are never recycled — the pool is sized to last the process lifetime.
 const PORT_MIN = 18000
 const PORT_MAX = 18999
 let nextHostPort = PORT_MIN
@@ -111,8 +112,9 @@ async function doStartService(moduleId: string, cfg: ContainerConfig): Promise<S
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 
-  // H4 fix: exec argv array directly, never via sh -c to avoid shell injection.
-  // The service must be started with nohup via its own shell if needed — caller's responsibility.
+  // H4 fix: each startCmd arg is POSIX single-quote-escaped before being passed to
+  // sh -c, preventing injection even if args contain spaces or special characters.
+  // The outer nohup/& allows the service process to outlive the exec call.
   if (cfg.startCmd && cfg.startCmd.length > 0) {
     const [cmd, ...args] = cfg.startCmd
     try {
@@ -168,7 +170,7 @@ export function getHostPort(moduleId: string): number | null {
   return registry.get(moduleId)?.hostPort ?? null
 }
 
-// H3 helper: check registry presence (for isEnabled guard in server.ts)
+// Returns true if a container for this moduleId is running or in-flight (starting).
 export function isRegistered(moduleId: string): boolean {
   return registry.has(moduleId) || starting.has(moduleId)
 }
