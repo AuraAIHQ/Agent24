@@ -2,7 +2,7 @@
 
 > 主里程碑列表见 [PLAN.md 第六节](PLAN.md#六roadmap里程碑)。本文档维护当前进度。
 > 所有重大决策见 [decision.md](decision.md)。
-> 最后更新：2026-05-12
+> 最后更新：2026-05-13
 
 ---
 
@@ -61,13 +61,11 @@
 
 ---
 
-## M3（社区模块安装器 + BoxLite 沙箱 + oMLX 模型管理）— 🚧 进行中（PR#13 open）
+## M3（社区模块安装器 + BoxLite 沙箱 + oMLX 模型管理）— ✅ 完成（已合并 main，2026-05-13）
 
-### 已完成（当前 feat/m3-module-installer 分支）
-
-**社区模块 npm 安装器**
+**社区模块 npm 安装器（PR#13）**
 - [x] `src/backend/module-installer.ts`：`installModule()` / `uninstallModule()` / `loadInstalledModule()` / `discoverInstalledModules()`
-- [x] 包名合法性校验（`isValidPackageName`，防命令注入）
+- [x] 包名合法性校验（`isValidPackageName`，防命令注入；版本后缀故意拒绝）
 - [x] 安装失败自动回滚（load 失败 → 自动 npm uninstall，系统状态保持一致）
 - [x] 社区模块持久化：安装的模块写入 `~/.agent24/modules/`，重启后自动加载
 - [x] `capability-registry.ts` 扩展：`_communityModules[]`、`loadCommunityModules()`、`registerCommunityModule()`、`unregisterCommunityModule()`
@@ -87,18 +85,38 @@
 - [x] `src/backend/boxlite-host.ts`：懒加载单例，原生绑定不可用时优雅降级（CI 安全）
 - [x] `src/backend/capabilities/example-codebox.ts`：hybrid 模块，`POST /api/codebox/run`（每次独立容器）+ `GET /api/codebox/status`
 - [x] `src/renderer/pages/CodeSandbox.tsx`：Python 代码编辑器 + 运行按钮 + 输出面板 + BoxLite 可用性状态
-- [x] 全部 67 个测试通过，TypeScript typecheck 通过
 
-### 已全部完成（2026-05-12 确认）
-
+**Chat 与 IPC**
 - [x] Chat 页面接入真实 LLM（`POST /api/llm/chat`，oMLX → Ollama failover，用户已验证可用）
 - [x] IPC bridge：`modules:install` / `modules:uninstall` handlers 在 `ipc/index.ts` + preload 均已实现
-- [ ] Workbench 页面功能实现（当前为占位骨架，M4 规划）
-- [ ] PR#13 David review → merge
 
 ---
 
-## M4（10-12 周）— 自进化 + 共享 + Marketplace
+## M4a/b/c（BoxLite 服务容器运行时）— ✅ 完成（PR#14/15/16 David 审查通过，待合并 main）
+
+> PR#14 feat/m4a-security-fixes、PR#15 feat/m4b-resource-management、PR#16 feat/m4c-example-refactor
+> 已全部经过 Codex + David review，累积在 feat/m4c-example-refactor，待创建 PR → main
+
+**服务容器核心（PR#14 + 安全修复）**
+- [x] `src/backend/boxlite-service.ts`：长驻 OCI 容器管理，端口池（9000-9099），健康检测 + 自动重启
+- [x] POSIX 单引号转义（`startCmd` 参数注入防护）
+- [x] H1/H2/H3/H4 安全问题修复：shell 注入防护、容器 ID 验证、端口上限检测、注释与文档修正
+- [x] `isRegistered()` 含 pending 容器检测
+
+**资源管理（PR#15）**
+- [x] `pending` Map：容器从创建到健康检测期间加入 pending，`stopAll()` 可清理启动中容器
+- [x] `unregisterCommunityModule()` 调用 `stopService(moduleId)` 避免孤儿容器
+- [x] SIGINT + SIGTERM 共用同一 shutdown handler（`server.ts`）
+
+**透明代理与示例模块（PR#16）**
+- [x] `proxyToService` 返回 `{ status, headers, rawBody: Buffer }`，server 透明转发（不二次解析）
+- [x] Hop-by-hop 头过滤（RFC 7230 完整集合）
+- [x] `example-service-box.ts`：base64 编码 Python 脚本（避免 shell 转义问题）
+- [x] `src/renderer/pages/ServiceBoxDemo.tsx`：服务容器演示 UI
+
+---
+
+## M4（产品里程碑，10-12 周）— 自进化 + 共享 + Marketplace
 
 - [ ] 跨用户 skill 共享（用户自愿，匿名 trajectory）
 - [ ] Nostr 分发 skill 更新
